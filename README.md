@@ -68,20 +68,36 @@ PavanXDcl/
    `c:\Users\abdul\Desktop\DCL\PavanXDcl\backend`
 5. Ensure `pom.xml` is selected, and click **Finish**.
 6. Eclipse will import the project and resolve all Maven dependencies automatically from the maven wrapper.
-7. To run from Eclipse: Right-click the project -> **Run As** -> **Spring Boot App** (or run `BackendApplication.java`).
+7. To run from Eclipse using the Embedded Tomcat: Right-click the project -> **Run As** -> **Spring Boot App** (or run `BackendApplication.java`).
+8. To deploy to your External standalone **Apache Tomcat** in Eclipse:
+   - Configure Tomcat inside Eclipse via **Window** -> **Preferences** -> **Server** -> **Runtime Environments** -> **Add...** and select your Apache Tomcat installation directory.
+   - Show the **Servers** view in Eclipse (via **Window** -> **Show View** -> **Servers**).
+   - Right-click in the *Servers* view -> **New** -> **Server**, choose your Tomcat version, and click **Next**.
+   - Select the `backend` project, click **Add >** to move it to the configured side, and click **Finish**.
+   - Start the Tomcat server. The API endpoints will be accessible under the server port (e.g. `http://localhost:8080/backend/api`).
 
 ---
 
 ## Running the Application Locally
 
-### Running the Backend (Spring Boot)
+### Running the Backend
 
+#### Option A: Run Embedded Tomcat via Maven Wrapper
 Navigate to the `backend/` directory and execute:
 ```powershell
-# Using the Maven Wrapper (Windows)
 .\mvnw.cmd spring-boot:run
 ```
 The backend server runs on: `http://localhost:8080`
+
+#### Option B: Deploy WAR to Standalone external Apache Tomcat
+1. Build the WAR package:
+   ```powershell
+   .\mvnw.cmd clean package
+   ```
+2. Copy the generated `backend-0.0.1-SNAPSHOT.war` from `backend/target/` into your Apache Tomcat `webapps/` folder.
+3. Rename the WAR file to `backend.war` to access it at the `/backend` context path, or `ROOT.war` to deploy it at the root context path `/`.
+4. Start Tomcat using `bin/startup.bat`. The endpoints will be exposed at `http://localhost:8080/backend/api` (if renamed to `backend.war`).
+
 
 ### Running the Frontend (React + Vite)
 
