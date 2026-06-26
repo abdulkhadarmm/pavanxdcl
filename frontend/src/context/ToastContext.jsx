@@ -22,7 +22,7 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
       
-      {/* Toast Portal/Container */}
+      {/* Toast Container */}
       <div 
         style={{
           position: 'fixed',
@@ -38,24 +38,23 @@ export function ToastProvider({ children }) {
         }}
       >
         {toasts.map((toast) => {
-          let borderLeftColor = 'var(--accent-blue)';
+          let borderLeftColor = '#f97316'; // default brand orange
           let icon = 'ℹ️';
           
           if (toast.type === 'success') {
-            borderLeftColor = 'var(--accent-emerald)';
+            borderLeftColor = '#10b981'; // emerald green
             icon = '✅';
           } else if (toast.type === 'error') {
-            borderLeftColor = 'var(--accent-rose)';
+            borderLeftColor = '#f43f5e'; // rose red
             icon = '❌';
           } else if (toast.type === 'warning') {
-            borderLeftColor = 'var(--accent-amber)';
+            borderLeftColor = '#f59e0b'; // amber yellow
             icon = '⚠️';
           }
 
           return (
             <div
               key={toast.id}
-              className="glass-container animate-slide-up"
               style={{
                 pointerEvents: 'auto',
                 display: 'flex',
@@ -63,8 +62,10 @@ export function ToastProvider({ children }) {
                 justifyContent: 'space-between',
                 padding: '16px 20px',
                 borderLeft: `4px solid ${borderLeftColor}`,
-                boxShadow: 'var(--shadow-premium)',
-                backgroundColor: 'rgba(18, 20, 29, 0.95)',
+                boxShadow: '0 20px 40px -15px rgba(0,0,0,0.5)',
+                backgroundColor: '#121111',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderLeftWidth: '4px',
                 borderRadius: '8px',
                 animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
@@ -80,17 +81,17 @@ export function ToastProvider({ children }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'var(--text-muted)',
+                  color: '#64748b',
                   cursor: 'pointer',
                   fontSize: '1rem',
                   padding: '4px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  transition: 'var(--transition-smooth)'
+                  transition: 'all 0.3s'
                 }}
                 onMouseOver={(e) => (e.currentTarget.style.color = '#fff')}
-                onMouseOut={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                onMouseOut={(e) => (e.currentTarget.style.color = '#64748b')}
               >
                 ✕
               </button>

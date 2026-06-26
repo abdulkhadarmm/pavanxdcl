@@ -3,6 +3,7 @@ import courseService from '../services/courseService';
 import moduleService from '../services/moduleService';
 import sessionService from '../services/sessionService';
 import questionService from '../services/questionService';
+import authService from '../services/authService';
 import { useToast } from '../context/ToastContext';
 
 // Atomic UI components
@@ -20,6 +21,19 @@ import theme from '../config/theme';
 export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedCourseId, onClearCourse }) {
   const { addToast } = useToast();
   
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('admin_authenticated') === 'true';
+  });
+  const [adminEmail, setAdminEmail] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Tabs State
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'courses' | 'modules' | 'sessions' | 'trash' | 'settings'
+
+  // Data States
   const [courses, setCourses] = useState([]);
   const [deletedCourses, setDeletedCourses] = useState([]);
   const [activeCourse, setActiveCourse] = useState(null);
@@ -35,21 +49,141 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const [questions, setQuestions] = useState({}); // { moduleId: [questions] }
   const [deletedQuestions, setDeletedQuestions] = useState({}); // { moduleId: [questions] }
   
-  // UI states
-  const [showCourseBin, setShowCourseBin] = useState(false);
-  const [showModuleBin, setShowModuleBin] = useState(false);
-  const [showSessionBin, setShowSessionBin] = useState({}); // { moduleId: bool }
-  const [showQuestionBin, setShowQuestionBin] = useState({}); // { moduleId: bool }
+  // Stats
+  const [stats, setStats] = useState({
+    courses: 0,
+    modules: 0,
+    sessions: 0,
+    questions: 0,
+    resources: 0
+  });
+  const [recentSessions, setRecentSessions] = useState([]);
+
+  // Local Storage Trash overrides (for permanent deletion)
+  const [permanentlyDeletedIds, setPermanentlyDeletedIds] = useState(() => {
+    const saved = localStorage.getItem('perm_deleted_ids');
+    return saved ? JSON.parse(saved) : { courses: [], modules: [], sessions: [], questions: [] };
+  });
+
+  // UI / Bin toggles
+  const [trashType, setTrashType] = useState('courses'); // 'courses' | 'modules' | 'sessions' | 'questions'
   const [expandedModuleId, setExpandedModuleId] = useState(null);
   const [expandedSessionId, setExpandedSessionId] = useState(null);
+
+  // Drag-and-Drop State
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   // Modals state
   const [courseModal, setCourseModal] = useState({ open: false, mode: 'create', data: null });
   const [moduleModal, setModuleModal] = useState({ open: false, mode: 'create', data: null });
   const [sessionModal, setSessionModal] = useState({ open: false, mode: 'create', moduleId: null, data: null });
   const [questionModal, setQuestionModal] = useState({ open: false, mode: 'create', moduleId: null, data: null });
-  const [resourceModal, setResourceModal] = useState({ open: false, sessionId: null });
-  const [practiceModal, setPracticeModal] = useState({ open: false, sessionId: null });
+
+  // Session Form dynamic lists & dropdowns states
+  const [sessionResources, setSessionResources] = useState([]);
+  const [sessionPracticeLinks, setSessionPracticeLinks] = useState([]);
+  const [importanceType, setImportanceType] = useState('Medium');
+  const [customImportanceVal, setCustomImportanceVal] = useState('');
+  const [sessionFormErrors, setSessionFormErrors] = useState({});
+
+  useEffect(() => {
+    if (sessionModal.open) {
+      setSessionFormErrors({});
+      if (sessionModal.mode === 'edit' && sessionModal.data) {
+        setSessionResources(sessionModal.data.resources || []);
+        setSessionPracticeLinks(sessionModal.data.practiceLinks || []);
+        
+        const currentImportance = sessionModal.data.importanceLevel || 'Medium';
+        const predefined = ['Core Concept', 'Very Easy', 'Easy', 'Medium', 'High', 'Hard', 'Very Hard', 'Interview', 'Must Practice', 'Revision', 'Optional'];
+        const matchingPredefined = predefined.find(p => p.toLowerCase() === currentImportance.toLowerCase());
+        if (matchingPredefined) {
+          setImportanceType(matchingPredefined);
+          setCustomImportanceVal('');
+        } else {
+          setImportanceType('Custom');
+          setCustomImportanceVal(currentImportance);
+        }
+      } else {
+        setSessionResources([]);
+        setSessionPracticeLinks([]);
+        setImportanceType('Medium');
+        setCustomImportanceVal('');
+      }
+    }
+  }, [sessionModal]);
+
+  const handleAddResourceField = () => {
+    setSessionResources(prev => [...prev, { name: 'Recording', url: '' }]);
+  };
+
+  const handleResourceFieldChange = (index, field, value) => {
+    setSessionResources(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleRemoveResourceField = (index) => {
+    setSessionResources(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddPracticeLinkField = () => {
+    setSessionPracticeLinks(prev => [...prev, { name: 'LeetCode', url: '' }]);
+  };
+
+  const handlePracticeLinkFieldChange = (index, field, value) => {
+    setSessionPracticeLinks(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleRemovePracticeLinkField = (index) => {
+    setSessionPracticeLinks(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Custom Colors States inside Modals
+  const [primaryColorHex, setPrimaryColorHex] = useState('#8b5cf6');
+  const [secondaryColorHex, setSecondaryColorHex] = useState('#d946ef');
+
+  // Question Type Selector
+  const [selectedQType, setSelectedQType] = useState('MCQ');
+
+  // Dynamically loaded site settings
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('site_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      companyName: 'Pavan X Dhee Coding Lab',
+      shortName: 'PavanXDCL',
+      tagline: 'Empowering Learners with Premium Tech Education',
+      description: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.',
+      contact: {
+        email: 'pavan@dheecodinglab.com',
+        whatsapp: '+917760876386',
+        address: 'BTM Layout, India'
+      },
+      socials: {
+        whatsapp: 'https://whatsapp.com/channel/0029VbBqF0Q5a23umr9kfA3k',
+        discord: 'https://discord.gg/example-invite',
+        telegram: 'https://t.me/example-telegram',
+        instagram: 'https://www.instagram.com/codewithpavanprakash/',
+        linkedin: 'https://linkedin.com/company/pavanxdcl'
+      },
+      seo: {
+        defaultTitle: 'Pavan X Dhee Coding Lab (PavanXDCL) | Premium Coding Academy',
+        defaultDescription: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.'
+      }
+    };
+  });
 
   // Centralized Confirm Dialog state
   const [confirmDialog, setConfirmDialog] = useState({
@@ -57,18 +191,37 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     title: '',
     message: '',
     onConfirm: null,
-    variant: 'danger'
+    variant: 'danger',
+    confirmText: 'Yes, Delete'
   });
 
   // Errors & Loading
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Save Permanently Deleted IDs
   useEffect(() => {
-    fetchCourses();
-    fetchDeletedCourses();
-  }, []);
+    localStorage.setItem('perm_deleted_ids', JSON.stringify(permanentlyDeletedIds));
+  }, [permanentlyDeletedIds]);
 
+  // Load Data
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchCourses();
+      fetchDeletedCourses();
+    }
+  }, [isAuthenticated, permanentlyDeletedIds]);
+
+  // Load Profile from backend on authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      authService.getProfile()
+        .then(profile => setAdminEmail(profile.email))
+        .catch(err => console.error("Failed to load admin profile:", err));
+    }
+  }, [isAuthenticated]);
+
+  // Handle Selected Course Change
   useEffect(() => {
     if (selectedCourseId) {
       loadCourseDetails(selectedCourseId);
@@ -77,12 +230,131 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       setModules([]);
       setDeletedModules([]);
     }
-  }, [selectedCourseId]);
+  }, [selectedCourseId, permanentlyDeletedIds]);
+
+  // Load deleted sessions and questions for all modules in selected course to display in Trash Bin
+  useEffect(() => {
+    const fetchTrashItems = async () => {
+      if (!activeCourse || modules.length === 0) {
+        setDeletedSessions({});
+        setDeletedQuestions({});
+        return;
+      }
+      const sessTrash = {};
+      const questTrash = {};
+      for (const m of modules) {
+        try {
+          if (activeCourse.courseType === 'LEARNING') {
+            const delSess = await sessionService.getDeletedSessions(m.id);
+            sessTrash[m.id] = (delSess || []).filter(s => !permanentlyDeletedIds.sessions.includes(s.id));
+          } else {
+            const delQuest = await questionService.getDeletedQuestions(m.id);
+            questTrash[m.id] = (delQuest || []).filter(q => !permanentlyDeletedIds.questions.includes(q.id));
+          }
+        } catch (err) {
+          console.error(`Error loading trash for module ${m.id}:`, err);
+        }
+      }
+      setDeletedSessions(sessTrash);
+      setDeletedQuestions(questTrash);
+    };
+    fetchTrashItems();
+  }, [activeCourse, modules, permanentlyDeletedIds]);
+
+  // Login Submit
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authService.login(loginUsername, loginPassword);
+      setIsAuthenticated(true);
+      setAdminEmail(response.email);
+      localStorage.setItem('admin_authenticated', 'true');
+      if (response.token) {
+        localStorage.setItem('admin_session_token', response.token);
+      }
+      addToast('Welcome back, Admin!', 'success');
+      setLoginPassword('');
+    } catch (err) {
+      addToast(err.message || 'Invalid username or password!', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout Submit
+  const handleLogout = async () => {
+    try {
+      await authService.logout().catch(() => {});
+    } catch (err) {
+      console.error('Backend logout call failed', err);
+    }
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_authenticated');
+    localStorage.removeItem('admin_session_token');
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    addToast('Logged out successfully.', 'info');
+  };
+
+  // Fetch Stats dynamically
+  const loadDashboardStats = async (activeCoursesList) => {
+    try {
+      let moduleCount = 0;
+      let sessionCount = 0;
+      let questionCount = 0;
+      let resourceCount = 0;
+      let allSessions = [];
+
+      for (const c of activeCoursesList) {
+        if (permanentlyDeletedIds.courses.includes(c.id)) continue;
+        const mods = await moduleService.getModules(c.id).catch(() => []);
+        const filteredMods = mods.filter(m => !permanentlyDeletedIds.modules.includes(m.id));
+        moduleCount += filteredMods.length;
+
+        for (const m of filteredMods) {
+          if (c.courseType === 'LEARNING') {
+            const sess = await sessionService.getSessions(m.id).catch(() => []);
+            const filteredSess = sess.filter(s => !permanentlyDeletedIds.sessions.includes(s.id));
+            sessionCount += filteredSess.length;
+            
+            filteredSess.forEach(s => {
+              resourceCount += (s.resources ? s.resources.length : 0);
+              allSessions.push({
+                ...s,
+                moduleName: m.name,
+                courseName: c.name,
+                updatedAt: 'Just Now'
+              });
+            });
+          } else {
+            const quests = await questionService.getQuestions(m.id).catch(() => []);
+            const filteredQuests = quests.filter(q => !permanentlyDeletedIds.questions.includes(q.id));
+            questionCount += filteredQuests.length;
+          }
+        }
+      }
+
+      setStats({
+        courses: activeCoursesList.filter(c => !permanentlyDeletedIds.courses.includes(c.id)).length,
+        modules: moduleCount,
+        sessions: sessionCount,
+        questions: questionCount,
+        resources: resourceCount
+      });
+      setRecentSessions(allSessions.slice(0, 5));
+    } catch (err) {
+      console.error('Error loading dashboard stats:', err);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
       const data = await courseService.getCourses();
-      setCourses(data || []);
+      const active = (data || []).filter(c => !permanentlyDeletedIds.courses.includes(c.id));
+      setCourses(active);
+      loadDashboardStats(active);
     } catch (err) {
       setError('Failed to fetch courses: ' + err.message);
     }
@@ -91,7 +363,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const fetchDeletedCourses = async () => {
     try {
       const data = await courseService.getDeletedCourses();
-      setDeletedCourses(data || []);
+      const deleted = (data || []).filter(c => !permanentlyDeletedIds.courses.includes(c.id));
+      setDeletedCourses(deleted);
     } catch (err) {
       setError('Failed to fetch deleted courses: ' + err.message);
     }
@@ -104,10 +377,10 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       setActiveCourse(course);
       
       const activeMods = await moduleService.getModules(courseId);
-      setModules(activeMods || []);
+      setModules((activeMods || []).filter(m => !permanentlyDeletedIds.modules.includes(m.id)));
       
       const delMods = await moduleService.getDeletedModules(courseId);
-      setDeletedModules(delMods || []);
+      setDeletedModules((delMods || []).filter(m => !permanentlyDeletedIds.modules.includes(m.id)));
       
       setSelectedModuleId(null);
       setExpandedModuleId(null);
@@ -118,27 +391,39 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     }
   };
 
-  // Re-fetch helper for Module contents
   const loadModuleContent = async (moduleId) => {
     if (!activeCourse) return;
     try {
       if (activeCourse.courseType === 'LEARNING') {
         const activeSess = await sessionService.getSessions(moduleId);
-        setSessions(prev => ({ ...prev, [moduleId]: activeSess || [] }));
+        setSessions(prev => ({ 
+          ...prev, 
+          [moduleId]: (activeSess || []).filter(s => !permanentlyDeletedIds.sessions.includes(s.id)) 
+        }));
         
         const delSess = await sessionService.getDeletedSessions(moduleId);
-        setDeletedSessions(prev => ({ ...prev, [moduleId]: delSess || [] }));
+        setDeletedSessions(prev => ({ 
+          ...prev, 
+          [moduleId]: (delSess || []).filter(s => !permanentlyDeletedIds.sessions.includes(s.id)) 
+        }));
       } else {
         const activeQuest = await questionService.getQuestions(moduleId);
-        setQuestions(prev => ({ ...prev, [moduleId]: activeQuest || [] }));
+        setQuestions(prev => ({ 
+          ...prev, 
+          [moduleId]: (activeQuest || []).filter(q => !permanentlyDeletedIds.questions.includes(q.id)) 
+        }));
         
         const delQuest = await questionService.getDeletedQuestions(moduleId);
-        setDeletedQuestions(prev => ({ ...prev, [moduleId]: delQuest || [] }));
+        setDeletedQuestions(prev => ({ 
+          ...prev, 
+          [moduleId]: (delQuest || []).filter(q => !permanentlyDeletedIds.questions.includes(q.id)) 
+        }));
       }
     } catch (err) {
       setError('Failed to load module details: ' + err.message);
     }
   };
+
 
   const handleToggleModule = (moduleId) => {
     if (expandedModuleId === moduleId) {
@@ -149,7 +434,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     }
   };
 
-  const triggerConfirm = (title, message, onConfirm, variant = 'danger') => {
+  const triggerConfirm = (title, message, onConfirm, variant = 'danger', confirmText = null) => {
+    const defaultText = variant === 'info' ? 'Yes, Restore' : 'Yes, Delete';
     setConfirmDialog({
       open: true,
       title,
@@ -158,19 +444,34 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         onConfirm();
         setConfirmDialog(prev => ({ ...prev, open: false }));
       },
-      variant
+      variant,
+      confirmText: confirmText || defaultText
     });
+  };
+
+  // Course Add/Edit Modal
+  const openCourseModal = (mode, data = null) => {
+    if (mode === 'edit' && data) {
+      setPrimaryColorHex(data.primaryColor || '#8b5cf6');
+      setSecondaryColorHex(data.secondaryColor || '#d946ef');
+    } else {
+      setPrimaryColorHex('#8b5cf6');
+      setSecondaryColorHex('#d946ef');
+    }
+    setCourseModal({ open: true, mode, data });
   };
 
   // Course CRUD
   const handleSaveCourse = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    
     const payload = {
       name: formData.get('name'),
       description: formData.get('description'),
       courseType: formData.get('courseType'),
-      colorTheme: formData.get('colorTheme')
+      primaryColor: primaryColorHex,
+      secondaryColor: secondaryColorHex
     };
 
     try {
@@ -208,15 +509,36 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   };
 
   const handleRestoreCourse = async (id) => {
-    try {
-      await courseService.restoreCourse(id);
-      addToast('Course restored successfully!', 'success');
-      fetchCourses();
-      fetchDeletedCourses();
-    } catch (err) {
-      setError('Failed to restore course: ' + err.message);
-      addToast(err.message, 'error');
-    }
+    triggerConfirm(
+      'Restore Course?',
+      'Are you sure you want to restore this course back to active directory?',
+      async () => {
+        try {
+          await courseService.restoreCourse(id);
+          addToast('Course restored successfully!', 'success');
+          fetchCourses();
+          fetchDeletedCourses();
+        } catch (err) {
+          setError('Failed to restore course: ' + err.message);
+          addToast(err.message, 'error');
+        }
+      },
+      'info'
+    );
+  };
+
+  const handlePermanentDeleteCourse = (id) => {
+    triggerConfirm(
+      'Permanently Delete Course?',
+      'WARNING: This will permanently delete this course from the dashboard UI. This action cannot be undone.',
+      () => {
+        setPermanentlyDeletedIds(prev => ({
+          ...prev,
+          courses: [...prev.courses, id]
+        }));
+        addToast('Course permanently deleted!', 'success');
+      }
+    );
   };
 
   // Module CRUD
@@ -247,7 +569,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const handleDeleteModule = (id) => {
     triggerConfirm(
       'Soft Delete Module?',
-      'Are you sure you want to soft delete this module? All associated sessions/questions will be hidden.',
+      'Are you sure you want to soft delete this module/topic? All sessions will be archived.',
       async () => {
         try {
           await moduleService.deleteModule(id);
@@ -262,25 +584,95 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   };
 
   const handleRestoreModule = async (id) => {
-    try {
-      await moduleService.restoreModule(id);
-      addToast('Module restored successfully!', 'success');
-      loadCourseDetails(activeCourse.id);
-    } catch (err) {
-      setError('Failed to restore module: ' + err.message);
-      addToast(err.message, 'error');
-    }
+    triggerConfirm(
+      'Restore Module?',
+      'Are you sure you want to restore this module?',
+      async () => {
+        try {
+          await moduleService.restoreModule(id);
+          addToast('Module restored successfully!', 'success');
+          loadCourseDetails(activeCourse.id);
+        } catch (err) {
+          setError('Failed to restore module: ' + err.message);
+          addToast(err.message, 'error');
+        }
+      },
+      'info'
+    );
+  };
+
+  const handlePermanentDeleteModule = (id) => {
+    triggerConfirm(
+      'Permanently Delete Module?',
+      'WARNING: This will permanently delete this module from the dashboard UI. This action cannot be undone.',
+      () => {
+        setPermanentlyDeletedIds(prev => ({
+          ...prev,
+          modules: [...prev.modules, id]
+        }));
+        addToast('Module permanently deleted!', 'success');
+      }
+    );
   };
 
   // Session CRUD
   const handleSaveSession = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const payload = {
-      sessionCode: formData.get('sessionCode'),
-      contentTitle: formData.get('contentTitle'),
-      importanceLevel: formData.get('importanceLevel')
+    
+    const code = formData.get('sessionCode') || '';
+    const title = formData.get('contentTitle') || '';
+    
+    // Frontend Validations
+    const errors = {};
+    if (!code.trim()) {
+      errors.sessionCode = 'Session Code is required';
+    }
+    if (!title.trim()) {
+      errors.contentTitle = 'Session Title is required';
+    }
+    
+    // Standard URL format validation
+    const isValidUrl = (string) => {
+      if (!string || !string.trim()) return false;
+      try {
+        new URL(string);
+        return true;
+      } catch (_) {
+        return false;
+      }
     };
+
+    // Validate Resources
+    sessionResources.forEach((res, index) => {
+      if (!res.url || !isValidUrl(res.url)) {
+        errors[`resource_${index}`] = `Resource ${index + 1} has an invalid URL (e.g., must be https://...)`;
+      }
+    });
+
+    // Validate Practice Links
+    sessionPracticeLinks.forEach((link, index) => {
+      if (!link.url || !isValidUrl(link.url)) {
+        errors[`practice_${index}`] = `Practice Link ${index + 1} has an invalid URL (e.g., must be https://...)`;
+      }
+    });
+
+    if (Object.keys(errors).length > 0) {
+      setSessionFormErrors(errors);
+      return;
+    }
+
+    const level = importanceType === 'Custom' ? customImportanceVal : importanceType;
+
+    const payload = {
+      sessionCode: code,
+      contentTitle: title,
+      importanceLevel: level || 'Medium',
+      status: 'Published',
+      resources: sessionResources.map(r => ({ name: r.name, url: r.url })),
+      practiceLinks: sessionPracticeLinks.map(p => ({ name: p.name, url: p.url }))
+    };
+    
     const moduleId = sessionModal.moduleId;
 
     try {
@@ -317,34 +709,100 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   };
 
   const handleRestoreSession = async (id, moduleId) => {
-    try {
-      await sessionService.restoreSession(id);
-      addToast('Session restored successfully!', 'success');
-      loadModuleContent(moduleId);
-    } catch (err) {
-      setError('Failed to restore session: ' + err.message);
-      addToast(err.message, 'error');
+    triggerConfirm(
+      'Restore Session?',
+      'Are you sure you want to restore this session?',
+      async () => {
+        try {
+          await sessionService.restoreSession(id);
+          addToast('Session restored successfully!', 'success');
+          loadModuleContent(moduleId);
+        } catch (err) {
+          setError('Failed to restore session: ' + err.message);
+          addToast(err.message, 'error');
+        }
+      },
+      'info'
+    );
+  };
+
+  const handlePermanentDeleteSession = (id) => {
+    triggerConfirm(
+      'Permanently Delete Session?',
+      'WARNING: This will permanently delete this session from the dashboard UI.',
+      () => {
+        setPermanentlyDeletedIds(prev => ({
+          ...prev,
+          sessions: [...prev.sessions, id]
+        }));
+        addToast('Session permanently deleted!', 'success');
+      }
+    );
+  };
+
+  // Open Question Modal with selected question type detection
+  const openQuestionModal = (mode, moduleId, data = null) => {
+    if (mode === 'edit' && data) {
+      const tagsStr = data.tags || '';
+      if (tagsStr.includes('type_tf')) {
+        setSelectedQType('TF');
+      } else if (tagsStr.includes('type_fill_blank')) {
+        setSelectedQType('FILL_BLANK');
+      } else if (tagsStr.includes('type_descriptive')) {
+        setSelectedQType('DESCRIPTIVE');
+      } else {
+        setSelectedQType('MCQ');
+      }
+    } else {
+      setSelectedQType('MCQ');
     }
+    setQuestionModal({ open: true, mode, moduleId, data });
   };
 
   // Question CRUD
   const handleSaveQuestion = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const options = [
-      formData.get('optionA'),
-      formData.get('optionB'),
-      formData.get('optionC'),
-      formData.get('optionD')
-    ].filter(Boolean);
+    
+    // Determine options based on selected question type
+    let finalOptions = [];
+    let finalCorrectAnswer = '';
+    if (selectedQType === 'MCQ') {
+      finalOptions = [
+        formData.get('optionA') || '',
+        formData.get('optionB') || '',
+        formData.get('optionC') || '',
+        formData.get('optionD') || ''
+      ];
+      finalCorrectAnswer = formData.get('correctAnswer') || '';
+    } else if (selectedQType === 'TF') {
+      finalOptions = ['True', 'False'];
+      finalCorrectAnswer = formData.get('correctAnswerTF') || 'True';
+    } else if (selectedQType === 'FILL_BLANK') {
+      finalOptions = [];
+      finalCorrectAnswer = formData.get('correctAnswerBlank') || '';
+    } else if (selectedQType === 'DESCRIPTIVE') {
+      finalOptions = [];
+      finalCorrectAnswer = formData.get('correctAnswerDesc') || '';
+    }
+
+    // Append type tag to user tags
+    const userTags = formData.get('tags') || '';
+    const cleanUserTags = userTags.split(',')
+      .map(t => t.trim())
+      .filter(t => t && !t.startsWith('type_'))
+      .join(', ');
+    
+    const typeIndicator = `type_${selectedQType.toLowerCase()}`;
+    const finalTags = cleanUserTags ? `${cleanUserTags}, ${typeIndicator}` : typeIndicator;
 
     const payload = {
       questionText: formData.get('questionText'),
-      options,
-      correctAnswer: formData.get('correctAnswer'),
-      explanation: formData.get('explanation'),
+      options: finalOptions,
+      correctAnswer: finalCorrectAnswer,
       difficultyLevel: formData.get('difficultyLevel'),
-      tags: formData.get('tags')
+      tags: finalTags,
+      explanation: formData.get('explanation')
     };
     const moduleId = questionModal.moduleId;
 
@@ -382,86 +840,33 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   };
 
   const handleRestoreQuestion = async (id, moduleId) => {
-    try {
-      await questionService.restoreQuestion(id);
-      addToast('Question restored successfully!', 'success');
-      loadModuleContent(moduleId);
-    } catch (err) {
-      setError('Failed to restore question: ' + err.message);
-      addToast(err.message, 'error');
-    }
-  };
-
-  // Resources CRUD
-  const handleAddResource = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const payload = {
-      name: formData.get('name'),
-      url: formData.get('url')
-    };
-
-    try {
-      await sessionService.addResource(resourceModal.sessionId, payload);
-      addToast('Reference link added!', 'success');
-      loadModuleContent(expandedModuleId);
-      setResourceModal({ open: false, sessionId: null });
-    } catch (err) {
-      setError('Failed to add resource: ' + err.message);
-      addToast(err.message, 'error');
-    }
-  };
-
-  const handleDeleteResource = (id) => {
     triggerConfirm(
-      'Remove Resource Link?',
-      'Are you sure you want to permanently delete this resource link?',
+      'Restore Question?',
+      'Are you sure you want to restore this question?',
       async () => {
         try {
-          await sessionService.deleteResource(id);
-          addToast('Resource removed permanently!', 'success');
-          loadModuleContent(expandedModuleId);
+          await questionService.restoreQuestion(id);
+          addToast('Question restored successfully!', 'success');
+          loadModuleContent(moduleId);
         } catch (err) {
-          setError('Failed to delete resource: ' + err.message);
+          setError('Failed to restore question: ' + err.message);
           addToast(err.message, 'error');
         }
-      }
+      },
+      'info'
     );
   };
 
-  // Practice Links CRUD
-  const handleAddPractice = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const payload = {
-      name: formData.get('name'),
-      url: formData.get('url')
-    };
-
-    try {
-      await sessionService.addPracticeLink(practiceModal.sessionId, payload);
-      addToast('Practice task linked!', 'success');
-      loadModuleContent(expandedModuleId);
-      setPracticeModal({ open: false, sessionId: null });
-    } catch (err) {
-      setError('Failed to add practice task: ' + err.message);
-      addToast(err.message, 'error');
-    }
-  };
-
-  const handleDeletePractice = (id) => {
+  const handlePermanentDeleteQuestion = (id) => {
     triggerConfirm(
-      'Remove Practice Task?',
-      'Are you sure you want to permanently delete this practice link?',
-      async () => {
-        try {
-          await sessionService.deletePracticeLink(id);
-          addToast('Practice link removed permanently!', 'success');
-          loadModuleContent(expandedModuleId);
-        } catch (err) {
-          setError('Failed to delete practice link: ' + err.message);
-          addToast(err.message, 'error');
-        }
+      'Permanently Delete Question?',
+      'WARNING: This will permanently delete this question.',
+      () => {
+        setPermanentlyDeletedIds(prev => ({
+          ...prev,
+          questions: [...prev.questions, id]
+        }));
+        addToast('Question permanently deleted!', 'success');
       }
     );
   };
@@ -474,13 +879,19 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e, index) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
   };
 
   const handleDrop = async (e, targetIndex, listType, listData, parentId = null) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === targetIndex) return;
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
 
     const reorderedList = [...listData];
     const [removed] = reorderedList.splice(draggedIndex, 1);
@@ -505,497 +916,1404 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     } catch (err) {
       setError('Failed to reorder: ' + err.message);
       addToast(err.message, 'error');
-      // reload
       if (listType === 'courses') fetchCourses();
       else if (listType === 'modules') loadCourseDetails(activeCourse.id);
       else loadModuleContent(parentId);
     } finally {
       setDraggedIndex(null);
+      setDragOverIndex(null);
     }
   };
 
-  return (
-    <div style={{ padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', color: '#fff' }}>
-      
-      {/* Header Panel */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-        <div>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ color: theme.colors.blue }}>Admin</span> Control Panel
-          </h1>
-          <p style={{ color: theme.colors.textSecondary, marginTop: '8px' }}>
-            {activeCourse ? `Managing: ${activeCourse.name}` : 'Create, organize, soft delete, and reorder courses and content.'}
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Save Account Security (requires current password for auth API call)
+  const handleSaveAccountSecurity = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData(e.target);
+      const newUsername = formData.get('username');
+      const newPassword = formData.get('password');
+      if (!newPassword) {
+        addToast('Please enter a new password to update credentials.', 'warning');
+        setLoading(false);
+        return;
+      }
+      await authService.update(adminEmail, newUsername, newPassword);
+      setAdminEmail(newUsername);
+      e.target.password.value = '';
+      addToast('Account credentials updated successfully!', 'success');
+    } catch (err) {
+      setError('Failed to update credentials: ' + err.message);
+      addToast(err.message || 'Failed to update credentials', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Generic helper: save a partial settings update to localStorage
+  const saveSettingsSection = (partial) => {
+    const current = { ...settings };
+    const updated = { ...current, ...partial };
+    // Deep-merge nested objects
+    if (partial.contact) updated.contact = { ...(current.contact || {}), ...partial.contact };
+    if (partial.socials) updated.socials = { ...(current.socials || {}), ...partial.socials };
+    if (partial.seo) updated.seo = { ...(current.seo || {}), ...partial.seo };
+    localStorage.setItem('site_settings', JSON.stringify(updated));
+    setSettings(updated);
+  };
+
+  // Save Platform Branding
+  const handleSaveBranding = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    saveSettingsSection({
+      companyName: formData.get('companyName'),
+      shortName: formData.get('shortName'),
+      tagline: formData.get('tagline'),
+      description: formData.get('description')
+    });
+    addToast('Platform branding saved!', 'success');
+  };
+
+  // Save SEO Information
+  const handleSaveSEO = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    saveSettingsSection({
+      seo: {
+        defaultTitle: formData.get('defaultTitle'),
+        defaultDescription: formData.get('defaultDescription')
+      }
+    });
+    addToast('SEO settings saved!', 'success');
+  };
+
+  // Save Contact Information
+  const handleSaveContact = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    saveSettingsSection({
+      contact: {
+        email: formData.get('email'),
+        whatsapp: formData.get('contactWhatsapp'),
+        address: formData.get('address')
+      }
+    });
+    addToast('Contact information saved!', 'success');
+  };
+
+
+
+  // Render Login Panel
+  if (!isAuthenticated) {
+    return (
+      <div 
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#0a0908',
+          background: 'radial-gradient(circle at 50% 50%, #150c08 0%, #070605 85%)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '20px'
+        }}
+      >
+        <div 
+          className="glass-container"
+          style={{
+            width: '100%',
+            maxWidth: '450px',
+            backgroundColor: '#121111',
+            borderRadius: '24px',
+            padding: '40px 30px',
+            textAlign: 'center',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+            border: '1px solid rgba(255, 255, 255, 0.05)'
+          }}
+        >
+          {/* Logo */}
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 900, marginBottom: '8px', letterSpacing: '0.05em' }}>
+            <span style={{ color: '#fff' }}>PAVAN</span>
+            <span style={{ color: 'var(--accent-orange)' }}>XDCL</span>
+          </h2>
+          <h3 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: 700, marginBottom: '6px' }}>
+            Admin Portal
+          </h3>
+          <p style={{ color: theme.colors.textSecondary, fontSize: '0.9rem', marginBottom: '32px' }}>
+            Sign in to manage courses, modules, and sessions.
+          </p>
+
+          <form onSubmit={handleLoginSubmit} style={{ textAlign: 'left' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="login-user" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                Username
+              </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>👤</span>
+                <input 
+                  type="text" 
+                  id="login-user"
+                  value={loginUsername}
+                  onChange={e => setLoginUsername(e.target.value)}
+                  placeholder="Enter administrator username" 
+                  required 
+                  style={{
+                    paddingLeft: '45px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    width: '100%',
+                    height: '46px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '30px' }}>
+              <label htmlFor="login-pass" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                Password
+              </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>🔒</span>
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  id="login-pass"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="Enter password" 
+                  required 
+                  style={{
+                    paddingLeft: '45px',
+                    paddingRight: '45px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    width: '100%',
+                    height: '46px',
+                    outline: 'none'
+                  }}
+                />
+                <span 
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', cursor: 'pointer' }}
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </span>
+              </div>
+            </div>
+
+            <button 
+              type="submit"
+              style={{
+                width: '100%',
+                height: '48px',
+                background: 'var(--accent-orange)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(249, 115, 22, 0.25)',
+                transition: 'var(--transition-smooth)'
+              }}
+              onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+              onMouseOut={e => e.currentTarget.style.filter = 'none'}
+            >
+              Sign In
+            </button>
+          </form>
+
+          <p style={{ color: '#475569', fontSize: '0.75rem', marginTop: '32px' }}>
+            Authorized personnel only. Sessions are monitored.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          {activeCourse ? (
-            <Button variant="secondary" onClick={onClearCourse}>
-              &larr; Course Directory
-            </Button>
-          ) : (
-            <Button variant="secondary" onClick={onViewPublic}>
-              &larr; View Public Website
-            </Button>
-          )}
+      </div>
+    );
+  }
+
+  // Sidebar navigation click
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setError(null);
+  };
+
+  // Render Admin Dashboard
+  return (
+    <div style={{ position: 'relative', display: 'flex', minHeight: '100vh', backgroundColor: '#0d0a08', color: '#fff', overflowX: 'hidden' }}>
+      
+      {/* Background Glow Blobs (Fixed in screen viewport, matching Landing Page) */}
+      <div style={{
+        position: 'fixed',
+        top: '-10%',
+        left: '70%',
+        width: '60vw',
+        height: '60vw',
+        background: 'radial-gradient(circle, rgba(249, 115, 22, 0.35) 0%, rgba(249, 115, 22, 0) 80%)',
+        filter: 'blur(100px)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+      <div style={{
+        position: 'fixed',
+        top: '50%',
+        left: '20%',
+        width: '50vw',
+        height: '50vw',
+        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(139, 92, 246, 0) 80%)',
+        filter: 'blur(110px)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+
+      {/* Left Sidebar */}
+      <div 
+        style={{
+          zIndex: 10,
+          width: '260px',
+          backgroundColor: '#121111',
+          borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '30px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'fixed',
+          height: '100vh',
+          top: 0,
+          left: 0,
+          zIndex: 100
+        }}
+      >
+        {/* Branding header */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '40px', padding: '0 8px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '0.05em', margin: 0 }}>
+            <span style={{ color: '#fff' }}>PAVAN</span>
+            <span style={{ color: 'var(--accent-orange)' }}>XDCL</span>
+          </h2>
+          <span 
+            style={{
+              marginLeft: '10px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: 'var(--accent-orange)',
+              background: 'rgba(249, 115, 22, 0.08)',
+              border: '1px solid rgba(249, 115, 22, 0.15)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              textTransform: 'uppercase'
+            }}
+          >
+            Admin
+          </span>
+        </div>
+
+        {/* Navigation list */}
+        <nav style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { 
+              id: 'dashboard', 
+              label: 'Dashboard', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+            },
+            { 
+              id: 'courses', 
+              label: 'Courses', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            },
+            { 
+              id: 'modules', 
+              label: 'Modules', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            },
+            { 
+              id: 'sessions', 
+              label: 'Sessions', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            },
+            { 
+              id: 'trash', 
+              label: 'Trash Bin', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            },
+            { 
+              id: 'settings', 
+              label: 'Settings', 
+              icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            }
+          ].map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '9999px',
+                  border: 'none',
+                  background: isActive ? 'var(--accent-orange)' : 'transparent',
+                  color: isActive ? '#fff' : '#94a3b8',
+                  fontSize: '0.95rem',
+                  fontWeight: isActive ? 600 : 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = '#fff';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                  }
+                }}
+                onMouseOut={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = '#94a3b8';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <span>{item.icon}</span>
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer */}
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '20px' }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              width: '100%',
+              padding: '10px 16px',
+              border: 'none',
+              background: 'transparent',
+              color: '#f87171',
+              fontSize: '0.95rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>
+              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </span>
+            Logout
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '16px', paddingLeft: '16px' }}>
+            <span style={{ fontSize: '0.78rem', color: '#475569' }}>Console v1.0.0</span>
+          </div>
         </div>
       </div>
 
-      {error && (
-        <ErrorMessage 
-          title="Operation Error" 
-          message={error} 
-          onRetry={() => setError(null)} 
-          style={{ marginBottom: '24px' }} 
-        />
-      )}
-
-      {/* ----------------- COURSE MANAGER (ROOT VIEW) ----------------- */}
-      {!activeCourse && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <Button variant={!showCourseBin ? 'primary' : 'secondary'} onClick={() => setShowCourseBin(false)}>
-                Active Courses ({courses.length})
-              </Button>
-              <Button variant={showCourseBin ? 'danger' : 'secondary'} onClick={() => setShowCourseBin(true)}>
-                Trash Bin ({deletedCourses.length})
-              </Button>
-            </div>
-            
-            {!showCourseBin && (
-              <Button onClick={() => setCourseModal({ open: true, mode: 'create', data: null })}>
-                + Create Course
-              </Button>
-            )}
+      {/* Main Panel Content Container */}
+      <main 
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          marginLeft: '260px',
+          flexGrow: 1,
+          padding: '40px 50px',
+          minHeight: '100vh',
+          backgroundColor: 'transparent'
+        }}
+      >
+        {error && (
+          <div style={{ backgroundColor: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '8px', padding: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#f87171', fontSize: '0.9rem' }}>{error}</span>
+            <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.1rem' }}>&times;</button>
           </div>
+        )}
 
-          {/* Active Courses List (Supports Drag-and-Drop Reordering) */}
-          {!showCourseBin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {courses.map((course, idx) => (
+        {/* ==================== 1. DASHBOARD TAB ==================== */}
+        {activeTab === 'dashboard' && (
+          <div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '6px' }}>Analytics Dashboard</h1>
+            <p style={{ color: '#94a3b8', fontSize: '0.98rem', marginBottom: '40px' }}>
+              Overview of your Course Management Platform metrics. Welcome back, <strong style={{ color: '#fff' }}>{adminEmail}</strong>.
+            </p>
+
+            {/* Statistics Cards Row */}
+            <div 
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '16px',
+                marginBottom: '40px'
+              }}
+            >
+              {[
+                { 
+                  title: 'Total Courses', value: stats.courses, sub: 'Active in platform',
+                  icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                },
+                { 
+                  title: 'Total Modules', value: stats.modules, sub: 'Active in platform',
+                  icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                },
+                { 
+                  title: 'Total Sessions', value: stats.sessions, sub: 'Active in platform',
+                  icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                },
+                { 
+                  title: 'Total Resources', value: stats.resources, sub: 'Active in platform',
+                  icon: <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                }
+              ].map((card, idx) => (
                 <div 
-                  key={course.id} 
-                  className={`draggable-item accent-${course.colorTheme || 'blue'}`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, idx)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, idx, 'courses', courses)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: theme.colors.bgCard, borderLeft: '4px solid var(--theme-color)', cursor: 'move' }}
+                  key={idx}
+                  style={{
+                    backgroundColor: '#121111',
+                    borderRadius: '10px',
+                    padding: '22px 24px',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <div className="drag-handle">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>{course.name}</h3>
-                        <Badge type={course.courseType}>
-                          {course.courseType === 'LEARNING' ? 'Learning' : 'Question Bank'}
-                        </Badge>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 500 }}>{card.title}</span>
+                    <span style={{ fontSize: '1.1rem', color: 'var(--accent-orange)' }}>{card.icon}</span>
+                  </div>
+                  <span style={{ fontSize: '2.6rem', fontWeight: 800, color: '#fff', lineHeight: 1, marginBottom: '6px' }}>
+                    {card.value}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{card.sub}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Recently Updated and Quick Guides Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '24px', alignItems: 'start' }}>
+              
+              {/* Recently Updated Sessions */}
+              <div 
+                style={{
+                  backgroundColor: '#121111',
+                  borderRadius: '10px',
+                  padding: '24px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="16" height="16" fill="none" stroke="var(--accent-orange)" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Recently Updated Sessions
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Last 5 modifications</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {recentSessions.map((session, sidx) => (
+                    <div 
+                      key={sidx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 0',
+                        borderBottom: sidx < recentSessions.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{
+                          fontSize: '0.7rem',
+                          backgroundColor: 'rgba(249,115,22,0.1)',
+                          color: 'var(--accent-orange)',
+                          fontWeight: 700,
+                          padding: '3px 7px',
+                          borderRadius: '4px',
+                          fontFamily: 'monospace',
+                          minWidth: '32px',
+                          textAlign: 'center'
+                        }}>
+                          {session.sessionCode}
+                        </span>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.92rem' }}>{session.contentTitle}</div>
+                          <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '2px' }}>
+                            {session.courseName} · {session.moduleName}
+                          </div>
+                        </div>
                       </div>
-                      {course.description && (
-                        <p style={{ color: theme.colors.textSecondary, fontSize: '0.85rem', marginTop: '4px' }}>
-                          {course.description.substring(0, 80)}{course.description.length > 80 ? '...' : ''}
-                        </p>
-                      )}
+                      <span style={{ fontSize: '0.73rem', color: '#64748b', whiteSpace: 'nowrap', marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        {session.updatedAt}
+                      </span>
                     </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <Button variant="secondary" onClick={() => onSelectCourse(course.id)}>
-                      Manage Content
-                    </Button>
-                    <Button variant="secondary" onClick={() => setCourseModal({ open: true, mode: 'edit', data: course })}>
-                      Edit
-                    </Button>
-                    <Button variant="danger" onClick={() => handleDeleteCourse(course.id)}>
-                      Soft Delete
-                    </Button>
-                  </div>
+                  ))}
+                  {recentSessions.length === 0 && (
+                    <p style={{ color: '#64748b', textAlign: 'center', margin: '20px 0', fontSize: '0.88rem' }}>No active sessions recorded yet.</p>
+                  )}
                 </div>
-              ))}
-              {courses.length === 0 && (
-                <Card hoverable={false} padding="40px" style={{ textAlign: 'center' }}>
-                  <p style={{ color: theme.colors.textMuted, margin: 0 }}>No active courses found. Click "+ Create Course" to add one.</p>
-                </Card>
-              )}
-            </div>
-          )}
+              </div>
 
-          {/* Deleted Courses Trash List (Can Restore) */}
-          {showCourseBin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {deletedCourses.map(course => (
-                <div 
-                  key={course.id} 
-                  className="glass-card" 
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244,63,94,0.1)' }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: theme.colors.textSecondary, textDecoration: 'line-through' }}>{course.name}</h3>
-                      <Badge type="high">Deleted</Badge>
-                    </div>
-                    <p style={{ color: theme.colors.textMuted, fontSize: '0.85rem', marginTop: '4px' }}>Type: {course.courseType}</p>
-                  </div>
-                  <div>
-                    <Button variant="secondary" style={{ borderColor: theme.colors.emerald, color: '#34d399' }} onClick={() => handleRestoreCourse(course.id)}>
-                      Restore Course
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {deletedCourses.length === 0 && (
-                <Card hoverable={false} padding="40px" style={{ textAlign: 'center' }}>
-                  <p style={{ color: theme.colors.textMuted, margin: 0 }}>Trash bin is empty!</p>
-                </Card>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+              {/* Quick Guides */}
+              <div 
+                style={{
+                  backgroundColor: '#121111',
+                  borderRadius: '10px',
+                  padding: '24px',
+                  border: '1px solid rgba(255, 255, 255, 0.06)'
+                }}
+              >
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '18px' }}>Quick Guides</h3>
+                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {[
+                    { prefix: 'Use the ', bold: 'Courses', text: ' tab to create learning paths and assign theme colors.' },
+                    { prefix: 'Create ', bold: 'Modules', text: ' to partition courses into structural units (e.g. Week-01, DSA basics).' },
+                    { prefix: 'Add ', bold: 'Sessions', text: ', resource URLs (YouTube, PDFs, Drive), practice sheets, and set importance levels.' },
+                    { prefix: 'Accidentally deleted items go to the ', bold: 'Trash Bin', text: ' and can be restored or permanently cleared.' }
+                  ].map((item, i) => (
+                    <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', color: '#94a3b8', fontSize: '0.85rem', lineHeight: '1.55' }}>
+                      <span style={{ color: 'var(--accent-orange)', marginTop: '4px', flexShrink: 0, fontSize: '0.5rem' }}>●</span>
+                      <span>
+                        {item.prefix}<strong style={{ color: '#fff' }}>{item.bold}</strong>{item.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-      {/* ----------------- MODULE / TOPIC MANAGER (COURSE VIEW) ----------------- */}
-      {activeCourse && (
-        <div className={`accent-${activeCourse.colorTheme || 'blue'}`}>
-          
-          {/* Active Course Banner */}
-          <div className="glass-container" style={{ padding: '24px 30px', marginBottom: '30px', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'var(--theme-grad)' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== 2. COURSES TAB ==================== */}
+        {activeTab === 'courses' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
               <div>
-                <Badge type={activeCourse.courseType} style={{ marginBottom: '10px' }}>
-                  {activeCourse.courseType === 'LEARNING' ? 'Learning Layout' : 'Question Bank Layout'}
-                </Badge>
-                <h2>{activeCourse.name}</h2>
-                <p style={{ color: theme.colors.textSecondary, fontSize: '0.9rem', marginTop: '6px' }}>{activeCourse.description || 'No description.'}</p>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Courses</h1>
+                <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Create, edit, delete, and reorder courses using drag-and-drop.</p>
               </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Button variant="secondary" onClick={() => setCourseModal({ open: true, mode: 'edit', data: activeCourse })}>
-                  Edit Theme / Info
-                </Button>
-                <Button variant="secondary" onClick={onClearCourse}>
-                  Close Course &times;
-                </Button>
-              </div>
+              <button
+                onClick={() => openCourseModal('create')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'var(--accent-orange)', color: '#fff',
+                  border: 'none', borderRadius: '8px', padding: '10px 18px',
+                  fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                + Add Course
+              </button>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <Button variant={!showModuleBin ? 'primary' : 'secondary'} onClick={() => setShowModuleBin(false)}>
-                Active {activeCourse.courseType === 'LEARNING' ? 'Modules' : 'Topics'} ({modules.length})
-              </Button>
-              <Button variant={showModuleBin ? 'danger' : 'secondary'} onClick={() => setShowModuleBin(true)}>
-                Trash Bin ({deletedModules.length})
-              </Button>
-            </div>
-            {!showModuleBin && (
-              <Button onClick={() => setModuleModal({ open: true, mode: 'create', data: null })}>
-                + Create {activeCourse.courseType === 'LEARNING' ? 'Module' : 'Topic'}
-              </Button>
-            )}
-          </div>
-
-          {/* Active Modules list (supports drag-and-drop reordering) */}
-          {!showModuleBin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {modules.map((mod, idx) => {
-                const isOpen = expandedModuleId === mod.id;
-                
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {courses.map((course, idx) => {
+                const dot = course.primaryColor || '#6366f1';
                 return (
                   <div 
-                    key={mod.id} 
-                    className="glass-container"
+                    key={course.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, idx)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, idx, 'modules', modules)}
-                    style={{ overflow: 'hidden' }}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDrop={(e) => handleDrop(e, idx, 'courses', courses)}
+                    onDragEnd={handleDragEnd}
+                    style={{ 
+                      display: 'flex', alignItems: 'center',
+                      padding: '14px 16px',
+                      backgroundColor: dragOverIndex === idx && draggedIndex !== idx
+                        ? 'rgba(249,115,22,0.08)'
+                        : draggedIndex === idx ? 'rgba(249,115,22,0.03)' : 'transparent',
+                      borderRadius: '8px',
+                      transition: 'background 0.1s',
+                      gap: '0',
+                      opacity: draggedIndex === idx ? 0.5 : 1,
+                      borderTop: dragOverIndex === idx && draggedIndex !== null && draggedIndex > idx
+                        ? '2px solid var(--accent-orange)' : '2px solid transparent'
+                    }}
                   >
-                    
-                    {/* Module Accordion Header bar */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: 'rgba(255,255,255,0.01)', borderBottom: isOpen ? '1px solid var(--glass-border)' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1, cursor: 'pointer' }} onClick={() => handleToggleModule(mod.id)}>
-                        <div className="drag-handle" style={{ cursor: 'move' }} onClick={e => e.stopPropagation()}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                        </div>
-                        <div>
-                          <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{mod.name}</h3>
-                          {mod.description && <p style={{ color: theme.colors.textSecondary, fontSize: '0.8rem', marginTop: '3px' }}>{mod.description}</p>}
-                        </div>
+                    {/* Drag grip */}
+                    <div style={{ color: '#374151', cursor: 'grab', marginRight: '12px', flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                        <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                        <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                      </svg>
+                    </div>
+                    {/* Color dot */}
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: dot, flexShrink: 0, marginRight: '14px' }} />
+                    {/* Course info */}
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontWeight: 600, color: '#fff', fontSize: '0.98rem' }}>{course.name}</span>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px',
+                          borderRadius: '4px', backgroundColor: 'rgba(34,197,94,0.12)',
+                          color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)'
+                        }}>
+                          <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                          Published
+                        </span>
                       </div>
-
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <Button variant="secondary" className="btn-icon" onClick={() => setModuleModal({ open: true, mode: 'edit', data: mod })} title="Edit">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        </Button>
-                        <Button variant="danger" className="btn-icon" onClick={() => handleDeleteModule(mod.id)} title="Delete">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </Button>
-                        <Button variant="secondary" className="btn-icon" onClick={() => handleToggleModule(mod.id)} style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'var(--transition-smooth)' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
-                        </Button>
+                      <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '2px', fontFamily: 'monospace' }}>
+                        /{course.name?.toLowerCase().replace(/\s+/g, '-')}
                       </div>
                     </div>
-
-                    {/* Accordion Expanded Panel: SESSIONS or QUESTIONS CRUD editor */}
-                    {isOpen && (
-                      <div style={{ padding: '24px', background: 'rgba(0,0,0,0.1)' }}>
-                        
-                        {/* 1. LEARNING COURSE layout: Manage SESSIONS */}
-                        {activeCourse.courseType === 'LEARNING' && (
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <Button variant="secondary" onClick={() => setShowSessionBin(prev => ({ ...prev, [mod.id]: false }))}>
-                                  Active Sessions ({(sessions[mod.id] || []).length})
-                                </Button>
-                                <Button variant="danger" style={{ background: 'rgba(244,63,94,0.05)', borderColor: 'rgba(244,63,94,0.1)' }} onClick={() => setShowSessionBin(prev => ({ ...prev, [mod.id]: true }))}>
-                                  Sessions Bin ({(deletedSessions[mod.id] || []).length})
-                                </Button>
-                              </div>
-                              
-                              {!showSessionBin[mod.id] && (
-                                <Button size="sm" onClick={() => setSessionModal({ open: true, mode: 'create', moduleId: mod.id, data: null })}>
-                                  + Add Session
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Active Sessions list */}
-                            {!showSessionBin[mod.id] && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {(sessions[mod.id] || []).map((session, sIdx) => {
-                                  const isSessOpen = expandedSessionId === session.id;
-                                  
-                                  return (
-                                    <div 
-                                      key={session.id} 
-                                      className="glass-card" 
-                                      draggable
-                                      onDragStart={(e) => handleDragStart(e, sIdx)}
-                                      onDragOver={handleDragOver}
-                                      onDrop={(e) => handleDrop(e, sIdx, 'sessions', sessions[mod.id], mod.id)}
-                                      style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}
-                                    >
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandedSessionId(isSessOpen ? null : session.id)}>
-                                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                                          <div className="drag-handle" style={{ cursor: 'move' }} onClick={e => e.stopPropagation()}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                                          </div>
-                                          <span style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', marginRight: '10px', color: 'var(--theme-color)', fontWeight: 600 }}>{session.sessionCode}</span>
-                                          <span style={{ fontWeight: 500 }}>{session.contentTitle}</span>
-                                        </div>
-
-                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                                          <Badge type={session.importanceLevel || 'MEDIUM'}>{session.importanceLevel}</Badge>
-                                          <Button size="sm" variant="secondary" onClick={() => setSessionModal({ open: true, mode: 'edit', moduleId: mod.id, data: session })}>Edit</Button>
-                                          <Button size="sm" variant="danger" onClick={() => handleDeleteSession(session.id, mod.id)}>Delete</Button>
-                                        </div>
-                                      </div>
-
-                                      {/* Session Links Manager */}
-                                      {isSessOpen && (
-                                        <div style={{ marginTop: '16px', borderTop: `1px solid ${theme.colors.border}`, paddingTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                          
-                                          {/* Resources List manager */}
-                                          <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                              <strong style={{ fontSize: '0.85rem', color: theme.colors.textSecondary }}>Resource Files:</strong>
-                                              <Button size="sm" variant="secondary" onClick={() => setResourceModal({ open: true, sessionId: session.id })}>+ Add File</Button>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                              {session.resources && session.resources.map(res => (
-                                                <div key={res.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.01)', padding: '6px 10px', borderRadius: '4px', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.85rem' }}>{res.name}</span>
-                                                  <button style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.75rem' }} onClick={() => handleDeleteResource(res.id)}>Remove</button>
-                                                </div>
-                                              ))}
-                                              {(!session.resources || session.resources.length === 0) && <span style={{ fontSize: '0.8rem', color: theme.colors.textMuted }}>No resources uploaded</span>}
-                                            </div>
-                                          </div>
-
-                                          {/* Practice Tasks manager */}
-                                          <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                              <strong style={{ fontSize: '0.85rem', color: theme.colors.textSecondary }}>Practice Tasks:</strong>
-                                              <Button size="sm" variant="secondary" onClick={() => setPracticeModal({ open: true, sessionId: session.id })}>+ Add Task</Button>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                              {session.practiceLinks && session.practiceLinks.map(prac => (
-                                                <div key={prac.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.01)', padding: '6px 10px', borderRadius: '4px', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.85rem' }}>{prac.name}</span>
-                                                  <button style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.75rem' }} onClick={() => handleDeletePractice(prac.id)}>Remove</button>
-                                                </div>
-                                              ))}
-                                              {(!session.practiceLinks || session.practiceLinks.length === 0) && <span style={{ fontSize: '0.8rem', color: theme.colors.textMuted }}>No practice links added</span>}
-                                            </div>
-                                          </div>
-
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                                {(sessions[mod.id] || []).length === 0 && <p style={{ fontSize: '0.85rem', color: theme.colors.textMuted, textAlign: 'center', padding: '12px' }}>No active sessions.</p>}
-                              </div>
-                            )}
-
-                            {/* Session Trash Bin */}
-                            {showSessionBin[mod.id] && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {(deletedSessions[mod.id] || []).map(session => (
-                                  <div key={session.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(244,63,94,0.02)', border: '1px solid rgba(244,63,94,0.1)', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
-                                    <span style={{ color: theme.colors.textSecondary, textDecoration: 'line-through' }}>{session.sessionCode} - {session.contentTitle}</span>
-                                    <Button variant="secondary" style={{ borderColor: theme.colors.emerald, color: '#34d399' }} onClick={() => handleRestoreSession(session.id, mod.id)}>
-                                      Restore
-                                    </Button>
-                                  </div>
-                                ))}
-                                {(deletedSessions[mod.id] || []).length === 0 && <p style={{ fontSize: '0.85rem', color: theme.colors.textMuted, textAlign: 'center', padding: '12px' }}>Session trash is empty.</p>}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 2. QUESTION_BANK COURSE layout: Manage QUESTIONS */}
-                        {activeCourse.courseType === 'QUESTION_BANK' && (
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <Button variant="secondary" onClick={() => setShowQuestionBin(prev => ({ ...prev, [mod.id]: false }))}>
-                                  Active Questions ({(questions[mod.id] || []).length})
-                                </Button>
-                                <Button variant="danger" style={{ background: 'rgba(244,63,94,0.05)', borderColor: 'rgba(244,63,94,0.1)' }} onClick={() => setShowQuestionBin(prev => ({ ...prev, [mod.id]: true }))}>
-                                  Questions Bin ({(deletedQuestions[mod.id] || []).length})
-                                </Button>
-                              </div>
-                              {!showQuestionBin[mod.id] && (
-                                <Button size="sm" onClick={() => setQuestionModal({ open: true, mode: 'create', moduleId: mod.id, data: null })}>
-                                  + Add Question
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Active Questions list */}
-                            {!showQuestionBin[mod.id] && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {(questions[mod.id] || []).map((question, qIdx) => (
-                                  <div 
-                                    key={question.id} 
-                                    className="glass-card" 
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, qIdx)}
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => handleDrop(e, qIdx, 'questions', questions[mod.id], mod.id)}
-                                    style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}
-                                  >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                      <div style={{ display: 'flex', alignItems: 'flex-start', flexGrow: 1, marginRight: '16px' }}>
-                                        <div className="drag-handle" style={{ cursor: 'move', marginTop: '3px' }}>
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                                        </div>
-                                        <div>
-                                          <span style={{ fontSize: '0.8rem', color: theme.colors.textMuted }}>Q{qIdx + 1}. ({question.difficultyLevel})</span>
-                                          <p style={{ marginTop: '4px', fontWeight: 500, fontSize: '0.95rem', whiteSpace: 'pre-line' }}>{question.questionText}</p>
-                                          
-                                          {/* Options rendering */}
-                                          <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                            {question.options.map((opt, oIdx) => (
-                                              <span key={oIdx} style={{ fontSize: '0.8rem', color: opt === question.correctAnswer ? '#34d399' : theme.colors.textSecondary, background: opt === question.correctAnswer ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)', padding: '4px 8px', borderRadius: '4px', border: opt === question.correctAnswer ? '1px solid rgba(16,185,129,0.1)' : '1px solid rgba(255,255,255,0.03)' }}>
-                                                {String.fromCharCode(65 + oIdx)}. {opt}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div style={{ display: 'flex', gap: '6px' }}>
-                                        <Button size="sm" variant="secondary" onClick={() => setQuestionModal({ open: true, mode: 'edit', moduleId: mod.id, data: question })}>Edit</Button>
-                                        <Button size="sm" variant="danger" onClick={() => handleDeleteQuestion(question.id, mod.id)}>Delete</Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                {(questions[mod.id] || []).length === 0 && <p style={{ fontSize: '0.85rem', color: theme.colors.textMuted, textAlign: 'center', padding: '12px' }}>No active questions.</p>}
-                              </div>
-                            )}
-
-                            {/* Questions Trash Bin */}
-                            {showQuestionBin[mod.id] && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {(deletedQuestions[mod.id] || []).map(question => (
-                                  <div key={question.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(244,63,94,0.02)', border: '1px solid rgba(244,63,94,0.1)', padding: '12px 16px', borderRadius: '6px', alignItems: 'center' }}>
-                                    <span style={{ color: theme.colors.textSecondary, textDecoration: 'line-through', fontSize: '0.9rem' }}>{question.questionText.substring(0, 80)}...</span>
-                                    <Button variant="secondary" style={{ borderColor: theme.colors.emerald, color: '#34d399' }} onClick={() => handleRestoreQuestion(question.id, mod.id)}>
-                                      Restore
-                                    </Button>
-                                  </div>
-                                ))}
-                                {(deletedQuestions[mod.id] || []).length === 0 && <p style={{ fontSize: '0.85rem', color: theme.colors.textMuted, textAlign: 'center', padding: '12px' }}>Questions trash is empty.</p>}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                      </div>
-                    )}
-
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => openCourseModal('edit', course)}
+                        title="Edit course"
+                        style={{
+                          background: 'none', border: 'none', color: '#6b7280',
+                          cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                          display: 'flex', alignItems: 'center'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.color = '#fff'}
+                        onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                      >
+                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCourse(course.id)}
+                        title="Soft delete course"
+                        style={{
+                          background: 'none', border: 'none', color: '#6b7280',
+                          cursor: 'pointer', padding: '6px', borderRadius: '6px',
+                          display: 'flex', alignItems: 'center'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.color = '#f87171'}
+                        onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                      >
+                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
-
-              {modules.length === 0 && (
-                <Card hoverable={false} padding="40px" style={{ textAlign: 'center' }}>
-                  <p style={{ color: theme.colors.textMuted, margin: 0 }}>
-                    No active {activeCourse.courseType === 'LEARNING' ? 'modules' : 'topics'} found. Click "+ Create {activeCourse.courseType === 'LEARNING' ? 'Module' : 'Topic'}" to add one.
-                  </p>
-                </Card>
+              {courses.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
+                  No active courses. Click "+ Add Course" to create one.
+                </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Soft-deleted Modules Bin */}
-          {showModuleBin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {deletedModules.map(mod => (
-                <div 
-                  key={mod.id} 
-                  className="glass-card" 
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'rgba(244,63,94,0.1)' }}
+        {/* ==================== 3. MODULES TAB ==================== */}
+        {activeTab === 'modules' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
+              <div>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Modules</h1>
+                <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Organize courses into modular segments and reorder them.</p>
+              </div>
+              {activeCourse && (
+                <button
+                  onClick={() => setModuleModal({ open: true, mode: 'create', data: null })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: 'var(--accent-orange)', color: '#fff',
+                    border: 'none', borderRadius: '8px', padding: '10px 18px',
+                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                  }}
                 >
-                  <div>
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: theme.colors.textSecondary, textDecoration: 'line-through' }}>{mod.name}</h3>
+                  + Add Module
+                </button>
+              )}
+            </div>
+
+            {/* Course Selector Panel */}
+            <div style={{ backgroundColor: '#121111', borderRadius: '10px', padding: '20px 24px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>CURRENT COURSE SELECTION</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: 0 }}>Select a course to load and organize its respective modules.</p>
+                <div style={{ position: 'relative', minWidth: '220px' }}>
+                  <select 
+                    id="course-select-dropdown"
+                    value={activeCourse ? activeCourse.id : ''} 
+                    onChange={e => {
+                      if (e.target.value) onSelectCourse(Number(e.target.value));
+                      else onClearCourse();
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '40px',
+                      backgroundColor: '#0d0a08',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '0 12px',
+                      fontSize: '0.9rem',
+                      cursor: 'pointer',
+                      appearance: 'none',
+                      paddingRight: '32px'
+                    }}
+                  >
+                    <option value="">Select a course...</option>
+                    {courses.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none', fontSize: '0.7rem' }}>▼</span>
+                </div>
+              </div>
+            </div>
+
+            {activeCourse ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {modules.map((mod, idx) => (
+                  <div 
+                    key={mod.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDrop={(e) => handleDrop(e, idx, 'modules', modules)}
+                    onDragEnd={handleDragEnd}
+                    style={{ 
+                      display: 'flex', alignItems: 'center',
+                      padding: '14px 16px',
+                      backgroundColor: dragOverIndex === idx && draggedIndex !== idx
+                        ? 'rgba(249,115,22,0.08)'
+                        : draggedIndex === idx ? 'rgba(249,115,22,0.03)' : 'transparent',
+                      borderRadius: '8px',
+                      transition: 'background 0.1s',
+                      opacity: draggedIndex === idx ? 0.5 : 1,
+                      borderTop: dragOverIndex === idx && draggedIndex !== null && draggedIndex > idx
+                        ? '2px solid var(--accent-orange)' : '2px solid transparent'
+                    }}
+                  >
+                    {/* Drag grip */}
+                    <div style={{ color: '#374151', cursor: 'grab', marginRight: '12px', flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                        <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                        <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                      </svg>
+                    </div>
+                    {/* Left color border accent */}
+                    <div style={{
+                      width: '3px', height: '36px', borderRadius: '2px',
+                      backgroundColor: activeCourse.primaryColor || '#6366f1',
+                      marginRight: '16px', flexShrink: 0
+                    }} />
+                    {/* Module info */}
+                    <div style={{ flexGrow: 1 }}>
+                      <span style={{ fontWeight: 600, color: '#fff', fontSize: '0.98rem' }}>{mod.name}</span>
+                      {mod.description && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{mod.description}</div>}
+                    </div>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => setModuleModal({ open: true, mode: 'edit', data: mod })}
+                        title="Edit module"
+                        style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                        onMouseOver={e => e.currentTarget.style.color = '#fff'}
+                        onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                      >
+                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteModule(mod.id)}
+                        title="Soft delete module"
+                        style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                        onMouseOver={e => e.currentTarget.style.color = '#f87171'}
+                        onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                      >
+                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <Button variant="secondary" style={{ borderColor: theme.colors.emerald, color: '#34d399' }} onClick={() => handleRestoreModule(mod.id)}>
-                      Restore
-                    </Button>
+                ))}
+                {modules.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>
+                    No modules yet. Click "+ Add Module" to get started.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>
+                Select a course above to manage its modules.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================== 4. SESSIONS TAB ==================== */}
+        {activeTab === 'sessions' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
+              <div>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Sessions</h1>
+                <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Build sessions, add YouTube recordings, Google Drive notes, and solve LeetCode sheets.</p>
+              </div>
+              {activeCourse && selectedModuleId && activeCourse.courseType === 'LEARNING' && (
+                <button
+                  onClick={() => setSessionModal({ open: true, mode: 'create', moduleId: selectedModuleId, data: null })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: 'var(--accent-orange)', color: '#fff',
+                    border: 'none', borderRadius: '8px', padding: '10px 18px',
+                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                  }}
+                >
+                  + Add Session
+                </button>
+              )}
+            </div>
+
+            {/* Selectors Panel */}
+            <div style={{ backgroundColor: '#121111', borderRadius: '10px', padding: '20px 24px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>COURSE SELECTION</div>
+                  <div style={{ position: 'relative' }}>
+                    <select 
+                      id="syllabus-course-select"
+                      value={activeCourse ? activeCourse.id : ''} 
+                      onChange={e => {
+                        if (e.target.value) { onSelectCourse(Number(e.target.value)); setSelectedModuleId(null); }
+                        else { onClearCourse(); setSelectedModuleId(null); }
+                      }}
+                      style={{
+                        width: '100%', height: '42px',
+                        backgroundColor: '#0d0a08', border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#fff', borderRadius: '8px', padding: '0 12px',
+                        fontSize: '0.9rem', cursor: 'pointer', appearance: 'none', paddingRight: '32px'
+                      }}
+                    >
+                      <option value="">Select a course...</option>
+                      {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none', fontSize: '0.7rem' }}>▼</span>
                   </div>
                 </div>
-              ))}
-              {deletedModules.length === 0 && (
-                <Card hoverable={false} padding="40px" style={{ textAlign: 'center' }}>
-                  <p style={{ color: theme.colors.textMuted, margin: 0 }}>Trash bin is empty!</p>
-                </Card>
-              )}
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>MODULE SELECTION</div>
+                  <div style={{ position: 'relative' }}>
+                    <select 
+                      id="syllabus-module-select"
+                      value={selectedModuleId || ''} 
+                      onChange={e => { setSelectedModuleId(Number(e.target.value)); handleToggleModule(Number(e.target.value)); }}
+                      disabled={!activeCourse}
+                      style={{
+                        width: '100%', height: '42px',
+                        backgroundColor: '#0d0a08', border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#fff', borderRadius: '8px', padding: '0 12px',
+                        fontSize: '0.9rem', cursor: 'pointer', appearance: 'none', paddingRight: '32px',
+                        opacity: !activeCourse ? 0.5 : 1
+                      }}
+                    >
+                      <option value="">Select a module...</option>
+                      {modules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                    <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none', fontSize: '0.7rem' }}>▼</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-          
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* ============================== FORM MODALS ============================== */}
-      {/* ========================================================================= */}
+            {activeCourse && selectedModuleId ? (
+              <div>
+                {/* 4A. LEARNING COURSE VIEW: SESSIONS LIST */}
+                {activeCourse.courseType === 'LEARNING' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {(sessions[selectedModuleId] || []).map((session, sIdx) => {
+                      const isSessOpen = expandedSessionId === session.id;
+                      const importanceBadgeStyle = (() => {
+                        const lvl = (session.importanceLevel || 'MEDIUM').toUpperCase();
+                        if (lvl === 'HIGH' || lvl === 'IMPORTANT') return { bg: 'rgba(168,85,247,0.15)', color: '#a855f7', text: 'IMPORTANT' };
+                        if (lvl === 'LOW' || lvl === 'EASY') return { bg: 'rgba(34,197,94,0.12)', color: '#22c55e', text: 'EASY' };
+                        return { bg: 'rgba(249,115,22,0.12)', color: 'var(--accent-orange)', text: 'MEDIUM' };
+                      })();
 
-      {/* 1. COURSE FORM MODAL */}
+                      return (
+                        <div key={session.id}>
+                          <div 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, sIdx)}
+                            onDragOver={(e) => handleDragOver(e, sIdx)}
+                            onDrop={(e) => handleDrop(e, sIdx, 'sessions', sessions[selectedModuleId] || [], selectedModuleId)}
+                            onDragEnd={handleDragEnd}
+                            style={{
+                              display: 'flex', alignItems: 'center',
+                              padding: '14px 16px',
+                              backgroundColor: dragOverIndex === sIdx && draggedIndex !== sIdx
+                                ? 'rgba(249,115,22,0.08)'
+                                : draggedIndex === sIdx ? 'rgba(249,115,22,0.03)' : 'transparent',
+                              borderRadius: '8px',
+                              transition: 'background 0.1s',
+                              opacity: draggedIndex === sIdx ? 0.5 : 1,
+                              borderTop: dragOverIndex === sIdx && draggedIndex !== null && draggedIndex > sIdx
+                                ? '2px solid var(--accent-orange)' : '2px solid transparent'
+                            }}
+                          >
+                            {/* Drag grip */}
+                            <div style={{ color: '#374151', cursor: 'grab', marginRight: '12px', flexShrink: 0 }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                                <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                                <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                              </svg>
+                            </div>
+                            {/* Session code */}
+                            <span style={{
+                              fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 700,
+                              backgroundColor: 'rgba(249,115,22,0.1)', color: 'var(--accent-orange)',
+                              padding: '3px 7px', borderRadius: '4px', marginRight: '14px', flexShrink: 0
+                            }}>{session.sessionCode}</span>
+                            {/* Title + meta */}
+                            <div style={{ flexGrow: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, color: '#fff', fontSize: '0.98rem' }}>{session.contentTitle}</span>
+                                <span style={{
+                                  fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px',
+                                  backgroundColor: importanceBadgeStyle.bg, color: importanceBadgeStyle.color
+                                }}>{importanceBadgeStyle.text}</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                                {session.resources && session.resources.length > 0 && (
+                                  <span style={{ fontSize: '0.73rem', color: '#64748b' }}>{session.resources.length} Resource{session.resources.length !== 1 ? 's' : ''}</span>
+                                )}
+                                {session.practiceLinks && session.practiceLinks.length > 0 && (
+                                  <span style={{ fontSize: '0.73rem', color: '#64748b' }}>● {session.practiceLinks.length} Practice link{session.practiceLinks.length !== 1 ? 's' : ''}</span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                              <button
+                                onClick={() => setExpandedSessionId(isSessOpen ? null : session.id)}
+                                title="Expand resources"
+                                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '0.8rem' }}
+                              >
+                                {isSessOpen ? '▲' : '▼'}
+                              </button>
+                              <button
+                                onClick={() => setSessionModal({ open: true, mode: 'edit', moduleId: selectedModuleId, data: session })}
+                                title="Edit session"
+                                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                                onMouseOver={e => e.currentTarget.style.color = '#fff'}
+                                onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                              >
+                                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSession(session.id, selectedModuleId)}
+                                title="Delete session"
+                                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                                onMouseOver={e => e.currentTarget.style.color = '#f87171'}
+                                onMouseOut={e => e.currentTarget.style.color = '#6b7280'}
+                              >
+                                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                              </button>
+                            </div>
+                          </div>
+
+                            {/* Resource and Practice Links list */}
+                            {isSessOpen && (
+                              <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                                {/* Left Side: Study Materials */}
+                                <div>
+                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                     <h5 style={{ fontSize: '0.82rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>📄 Study Files</h5>
+                                   </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {session.resources && session.resources.map(res => (
+                                      <div key={res.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0a0908', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                        <a href={res.url} target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'none', fontSize: '0.88rem' }}>🔗 {res.name}</a>
+                                      </div>
+                                    ))}
+                                    {(!session.resources || session.resources.length === 0) && (
+                                      <span style={{ fontSize: '0.82rem', color: '#64748b' }}>No reference files uploaded.</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Right Side: Practice Tasks */}
+                                <div>
+                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                     <h5 style={{ fontSize: '0.82rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>🎮 Practice Tasks</h5>
+                                   </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {session.practiceLinks && session.practiceLinks.map(prac => (
+                                      <div key={prac.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0a0908', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                                        <a href={prac.url} target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'none', fontSize: '0.88rem' }}>🚀 {prac.name}</a>
+                                      </div>
+                                    ))}
+                                    {(!session.practiceLinks || session.practiceLinks.length === 0) && (
+                                      <span style={{ fontSize: '0.82rem', color: '#64748b' }}>No platform tasks linked.</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {(sessions[selectedModuleId] || []).length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>
+                          No sessions yet. Click "+ Add Session" to create content.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* 4B. QUESTION BANK COURSE VIEW: QUESTIONS LIST */}
+                {activeCourse.courseType === 'QUESTION_BANK' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Active Questions ({(questions[selectedModuleId] || []).length})</h3>
+                      <button onClick={() => openQuestionModal('create', selectedModuleId)} style={{ background: 'var(--accent-orange)', border: 'none', color: '#fff', borderRadius: '8px', padding: '8px 16px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer' }}>+ Add Question</button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {(questions[selectedModuleId] || []).map((q, qIdx) => (
+                        <div 
+                          key={q.id}
+                          className="glass-container"
+                          style={{ backgroundColor: '#121111', padding: '20px', border: '1px solid rgba(255, 255, 255, 0.05)' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                            <div style={{ flexGrow: 1, marginRight: '20px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-orange)', fontWeight: 600 }}>Q{qIdx + 1}</span>
+                                <Badge type={q.difficultyLevel || 'MEDIUM'}>{q.difficultyLevel}</Badge>
+                                {q.tags && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Tags: {q.tags}</span>}
+                              </div>
+                              <p style={{ fontWeight: 600, color: '#fff', fontSize: '1.02rem', lineHeight: '1.4' }}>{q.questionText}</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => openQuestionModal('edit', selectedModuleId, q)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', borderRadius: '6px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}>Edit</button>
+                              <button onClick={() => handleDeleteQuestion(q.id, selectedModuleId)} style={{ background: 'none', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: '6px', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer' }}>Delete</button>
+                            </div>
+                          </div>
+
+                          {/* Options list */}
+                          {q.options && q.options.length > 0 && !q.tags?.includes('type_descriptive') && !q.tags?.includes('type_fill_blank') && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px', paddingLeft: '20px' }}>
+                              {q.options.map((opt, oidx) => {
+                                const isCorrect = opt === q.correctAnswer;
+                                return (
+                                  <div 
+                                    key={oidx} 
+                                    style={{ 
+                                      padding: '8px 12px', 
+                                      borderRadius: '6px', 
+                                      border: isCorrect ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.03)',
+                                      backgroundColor: isCorrect ? 'rgba(16, 185, 129, 0.04)' : 'rgba(0,0,0,0.1)',
+                                      color: isCorrect ? '#34d399' : '#94a3b8',
+                                      fontSize: '0.9rem'
+                                    }}
+                                  >
+                                    {opt} {isCorrect && '✓'}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {q.explanation && (
+                            <div className="explanation-box" style={{ marginTop: '14px', fontSize: '0.88rem' }}>
+                              <strong>Solution Guide:</strong> {q.explanation}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {(questions[selectedModuleId] || []).length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>
+                          No questions found. Click "+ Add Question" to start the assessment bank.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>
+                Select both a course and a module above to display sessions.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================== 5. TRASH BIN TAB ==================== */}
+        {activeTab === 'trash' && (
+          <div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '6px' }}>Centralized Trash Bin</h1>
+            <p style={{ color: '#94a3b8', marginBottom: '32px' }}>Review soft-deleted items, restore them to syllabus, or wipe them permanently.</p>
+
+            {/* Type selector toggle buttons */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '28px' }}>
+              {[
+                { id: 'courses', label: `Courses (${deletedCourses.length})` },
+                { id: 'modules', label: `Modules (${deletedModules.length})` },
+                { id: 'sessions', label: `Sessions (${Object.values(deletedSessions).flat().length})` },
+                { id: 'questions', label: `Questions (${Object.values(deletedQuestions).flat().length})` }
+              ].map(toggle => (
+                <button
+                  key={toggle.id}
+                  onClick={() => setTrashType(toggle.id)}
+                  style={{
+                    padding: '8px 16px', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer',
+                    border: trashType === toggle.id ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: trashType === toggle.id ? 'var(--accent-orange)' : 'transparent',
+                    color: trashType === toggle.id ? '#fff' : '#94a3b8'
+                  }}
+                >
+                  {toggle.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Render selected trash type */}
+            {trashType === 'courses' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {deletedCourses.map(c => (
+                  <div 
+                    key={c.id}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: '8px', backgroundColor: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}
+                  >
+                    <div>
+                      <span style={{ fontSize: '0.98rem', fontWeight: 600, color: '#f87171', textDecoration: 'line-through' }}>{c.name}</span>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Type: {c.courseType}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleRestoreCourse(c.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.4)', background: 'transparent', color: '#34d399', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Restore</button>
+                      <button onClick={() => handlePermanentDeleteCourse(c.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#f87171', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Permanent</button>
+                    </div>
+                  </div>
+                ))}
+                {deletedCourses.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>Courses trash bin is empty.</div>
+                )}
+              </div>
+            )}
+
+            {trashType === 'modules' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {deletedModules.map(m => (
+                  <div 
+                    key={m.id}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: '8px', backgroundColor: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}
+                  >
+                    <div>
+                      <span style={{ fontSize: '0.98rem', fontWeight: 600, color: '#f87171', textDecoration: 'line-through' }}>{m.name}</span>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Course: {activeCourse ? activeCourse.name : 'N/A'}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleRestoreModule(m.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.4)', background: 'transparent', color: '#34d399', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Restore</button>
+                      <button onClick={() => handlePermanentDeleteModule(m.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#f87171', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Permanent</button>
+                    </div>
+                  </div>
+                ))}
+                {deletedModules.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>Modules trash bin is empty.</div>
+                )}
+              </div>
+            )}
+
+            {trashType === 'sessions' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {Object.entries(deletedSessions).flatMap(([modId, list]) => 
+                  list.map(s => (
+                    <div 
+                      key={s.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: '8px', backgroundColor: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '0.7rem', backgroundColor: 'rgba(248,113,113,0.1)', color: '#f87171', fontFamily: 'monospace', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>{s.sessionCode}</span>
+                          <span style={{ fontSize: '0.98rem', fontWeight: 600, color: '#f87171', textDecoration: 'line-through' }}>{s.contentTitle}</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Module: {modules.find(m => m.id === Number(modId))?.name || 'Unknown'}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={() => handleRestoreSession(s.id, Number(modId))} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.4)', background: 'transparent', color: '#34d399', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Restore</button>
+                        <button onClick={() => handlePermanentDeleteSession(s.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#f87171', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Permanent</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {Object.values(deletedSessions).flat().length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>Sessions trash bin is empty.</div>
+                )}
+              </div>
+            )}
+
+            {trashType === 'questions' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {Object.entries(deletedQuestions).flatMap(([modId, list]) => 
+                  list.map(q => (
+                    <div 
+                      key={q.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: '8px', backgroundColor: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}
+                    >
+                      <div style={{ flexGrow: 1, marginRight: '20px' }}>
+                        <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#f87171', textDecoration: 'line-through', lineHeight: '1.4', margin: 0 }}>{q.questionText}</p>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Topic: {modules.find(m => m.id === Number(modId))?.name || 'Unknown'}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <button onClick={() => handleRestoreQuestion(q.id, Number(modId))} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.4)', background: 'transparent', color: '#34d399', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Restore</button>
+                        <button onClick={() => handlePermanentDeleteQuestion(q.id)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#f87171', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600 }}>Permanent</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {Object.values(deletedQuestions).flat().length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '0.9rem' }}>Questions trash bin is empty.</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================== 6. SETTINGS TAB ==================== */}
+        {activeTab === 'settings' && (
+          <div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '6px' }}>Control Panel Settings</h1>
+            <p style={{ color: '#94a3b8', marginBottom: '32px' }}>Configure each section independently. Only credential changes require a password.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', maxWidth: '850px' }}>
+
+              {/* ─── 1. Account Security (requires password) ─── */}
+              <form onSubmit={handleSaveAccountSecurity}>
+                <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
+                      🔒 Account Security Settings
+                    </h3>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                      Update Credentials
+                    </Button>
+                  </div>
+                  <p style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '18px' }}>
+                    Changing your admin email or password requires entering a new password.
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div>
+                      <label htmlFor="settings-username">Admin Username / Email</label>
+                      <Input key={adminEmail} id="settings-username" name="username" defaultValue={adminEmail} required placeholder="Email Address" />
+                    </div>
+                    <div>
+                      <label htmlFor="settings-password">New Admin Password</label>
+                      <Input id="settings-password" name="password" type="password" placeholder="Enter new secure password" />
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* ─── 3. Platform Branding ─── */}
+              <form onSubmit={handleSaveBranding}>
+                <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
+                      🎨 Platform Branding
+                    </h3>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                      Save Branding
+                    </Button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      <div>
+                        <label htmlFor="settings-companyName">Company Name</label>
+                        <Input id="settings-companyName" name="companyName" defaultValue={settings.companyName} required />
+                      </div>
+                      <div>
+                        <label htmlFor="settings-shortName">Brand Short Name / Logo</label>
+                        <Input id="settings-shortName" name="shortName" defaultValue={settings.shortName} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="settings-tagline">Brand Tagline</label>
+                      <Input id="settings-tagline" name="tagline" defaultValue={settings.tagline} required />
+                    </div>
+                    <div>
+                      <label htmlFor="settings-description">Brand Description</label>
+                      <Textarea id="settings-description" name="description" defaultValue={settings.description} rows="3" required />
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* ─── 4. SEO Default Information ─── */}
+              <form onSubmit={handleSaveSEO}>
+                <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
+                      🔍 SEO Default Information
+                    </h3>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                      Save SEO
+                    </Button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div>
+                      <label htmlFor="settings-defaultTitle">Default SEO Title</label>
+                      <Input id="settings-defaultTitle" name="defaultTitle" defaultValue={settings.seo?.defaultTitle} required />
+                    </div>
+                    <div>
+                      <label htmlFor="settings-defaultDescription">Default SEO Description</label>
+                      <Textarea id="settings-defaultDescription" name="defaultDescription" defaultValue={settings.seo?.defaultDescription} rows="3" required />
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* ─── 5. Contact Information ─── */}
+              <form onSubmit={handleSaveContact}>
+                <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
+                      📞 Contact Information & Location
+                    </h3>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                      Save Contact
+                    </Button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      <div>
+                        <label htmlFor="settings-email">Support Email Address</label>
+                        <Input id="settings-email" name="email" type="email" defaultValue={settings.contact?.email} required />
+                      </div>
+                      <div>
+                        <label htmlFor="settings-contactWhatsapp">Contact WhatsApp Number</label>
+                        <Input id="settings-contactWhatsapp" name="contactWhatsapp" defaultValue={settings.contact?.whatsapp} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="settings-address">Headquarters Address</label>
+                      <Input id="settings-address" name="address" defaultValue={settings.contact?.address} required />
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* Bottom spacer */}
+              <div style={{ height: '40px' }}></div>
+
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* -------------------- 1. COURSE FORM MODAL -------------------- */}
       {courseModal.open && (
         <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d' }}>
+          <div className="modal-content glass-container" style={{ background: '#121111', maxWidth: '600px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '20px' }}>
-              {courseModal.mode === 'create' ? 'Create New Course' : 'Edit Course Settings'}
+              {courseModal.mode === 'create' ? 'Create New Course' : 'Edit Course Details'}
             </h2>
             
             <form onSubmit={handleSaveCourse}>
@@ -1005,7 +2323,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 name="name"
                 defaultValue={courseModal.mode === 'edit' ? courseModal.data.name : ''}
                 required
-                placeholder="e.g. DSA, Aptitude, Java"
+                placeholder="e.g. Data Structures, rookie-rise"
               />
 
               <Select
@@ -1020,19 +2338,48 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 ]}
               />
 
-              <Select
-                label="Color Theme"
-                id="colorTheme"
-                name="colorTheme"
-                defaultValue={courseModal.mode === 'edit' ? courseModal.data.colorTheme : 'blue'}
-                options={[
-                  { value: 'blue', label: 'Deep Blue Accent' },
-                  { value: 'emerald', label: 'Emerald Teal Accent' },
-                  { value: 'royal', label: 'Royal Purple Accent' },
-                  { value: 'amber', label: 'Warm Amber Accent' },
-                  { value: 'rose', label: 'Sunset Rose Accent' }
-                ]}
-              />
+              {/* Color Theme custom settings with Manual Pickers and Hex Inputs */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                <div>
+                  <label>Primary Theme Color</label>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <input 
+                      type="color" 
+                      value={primaryColorHex}
+                      onChange={e => setPrimaryColorHex(e.target.value)}
+                      style={{ width: '42px', height: '42px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer', backgroundColor: 'transparent' }}
+                    />
+                    <input 
+                      type="text" 
+                      value={primaryColorHex}
+                      onChange={e => setPrimaryColorHex(e.target.value)}
+                      placeholder="#8b5cf6"
+                      required
+                      style={{ flexGrow: 1, height: '42px' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label>Secondary Theme Color</label>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <input 
+                      type="color" 
+                      value={secondaryColorHex}
+                      onChange={e => setSecondaryColorHex(e.target.value)}
+                      style={{ width: '42px', height: '42px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer', backgroundColor: 'transparent' }}
+                    />
+                    <input 
+                      type="text" 
+                      value={secondaryColorHex}
+                      onChange={e => setSecondaryColorHex(e.target.value)}
+                      placeholder="#d946ef"
+                      required
+                      style={{ flexGrow: 1, height: '42px' }}
+                    />
+                  </div>
+                </div>
+              </div>
 
               <Textarea
                 label="Description"
@@ -1043,9 +2390,9 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 placeholder="Enter a description for this course..."
               />
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
                 <Button variant="secondary" onClick={() => setCourseModal({ open: false, mode: 'create', data: null })}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit">Save Course</Button>
               </div>
             </form>
           </div>
@@ -1055,7 +2402,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       {/* 2. MODULE / TOPIC FORM MODAL */}
       {moduleModal.open && (
         <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d' }}>
+          <div className="modal-content glass-container" style={{ background: '#121111' }}>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '20px' }}>
               {moduleModal.mode === 'create' ? `Create ${activeCourse.courseType === 'LEARNING' ? 'Module' : 'Topic'}` : `Edit ${activeCourse.courseType === 'LEARNING' ? 'Module' : 'Topic'}`}
             </h2>
@@ -1091,44 +2438,194 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       {/* 3. SESSION FORM MODAL */}
       {sessionModal.open && (
         <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d' }}>
+          <div className="modal-content glass-container" style={{ background: '#121111', maxWidth: '650px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '20px' }}>
               {sessionModal.mode === 'create' ? 'Add Session' : 'Edit Session'}
             </h2>
             
-            <form onSubmit={handleSaveSession}>
+            {/* Validation Errors */}
+            {Object.keys(sessionFormErrors).length > 0 && (
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '12px', marginBottom: '20px', color: '#f87171', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: 600, marginBottom: '4px' }}>Please correct the following errors:</div>
+                <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                  {Object.values(sessionFormErrors).map((err, idx) => <li key={idx}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSession} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <Input
                 label="Session Code"
                 id="sessionCode"
                 name="sessionCode"
                 defaultValue={sessionModal.mode === 'edit' ? sessionModal.data.sessionCode : ''}
                 required
-                placeholder="e.g. S1, S2, L10"
+                placeholder="e.g. ST-01"
               />
 
               <Input
-                label="Content Title"
+                label="Session Content / Title"
                 id="contentTitle"
                 name="contentTitle"
                 defaultValue={sessionModal.mode === 'edit' ? sessionModal.data.contentTitle : ''}
                 required
-                placeholder="e.g. Introduction to Binary Search"
+                placeholder="e.g. Introduction to Stack"
               />
 
-              <Select
-                label="Importance Level"
-                id="importanceLevel"
-                name="importanceLevel"
-                defaultValue={sessionModal.mode === 'edit' ? sessionModal.data.importanceLevel : 'MEDIUM'}
-                options={[
-                  { value: 'LOW', label: 'Low' },
-                  { value: 'MEDIUM', label: 'Medium' },
-                  { value: 'HIGH', label: 'High' }
-                ]}
-              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'end' }}>
+                <Select
+                  label="Importance Level"
+                  id="importanceLevel"
+                  name="importanceLevel"
+                  value={importanceType}
+                  onChange={(e) => setImportanceType(e.target.value)}
+                  options={[
+                    { value: 'Core Concept', label: 'Core Concept' },
+                    { value: 'Very Easy', label: 'Very Easy' },
+                    { value: 'Easy', label: 'Easy' },
+                    { value: 'Medium', label: 'Medium' },
+                    { value: 'High', label: 'High' },
+                    { value: 'Hard', label: 'Hard' },
+                    { value: 'Very Hard', label: 'Very Hard' },
+                    { value: 'Interview', label: 'Interview' },
+                    { value: 'Must Practice', label: 'Must Practice' },
+                    { value: 'Revision', label: 'Revision' },
+                    { value: 'Optional', label: 'Optional' },
+                    { value: 'Custom', label: 'Custom Option...' }
+                  ]}
+                />
+                
+                {importanceType === 'Custom' ? (
+                  <Input
+                    label="Custom Importance"
+                    id="customImportance"
+                    name="customImportance"
+                    value={customImportanceVal}
+                    onChange={(e) => setCustomImportanceVal(e.target.value)}
+                    required
+                    placeholder="Enter custom value"
+                  />
+                ) : <div />}
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <Button variant="secondary" onClick={() => setSessionModal({ open: false, mode: 'create', moduleId: null, data: null })}>Cancel</Button>
+              {/* Resources Sub-form */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Resources</label>
+                  <Button type="button" size="sm" variant="secondary" onClick={handleAddResourceField}>+ Add Resource</Button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {sessionResources.map((res, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <select
+                        value={res.name}
+                        onChange={(e) => handleResourceFieldChange(index, 'name', e.target.value)}
+                        style={{
+                          background: '#1c1917',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: '#fff',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          width: '140px'
+                        }}
+                      >
+                        {['Recording', 'Notes', 'PDF', 'Slides', 'GitHub', 'Google Drive', 'Website', 'Article', 'Cheat Sheet', 'Custom'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      
+                      <input
+                        type="text"
+                        placeholder="Resource URL (e.g., https://...)"
+                        value={res.url}
+                        onChange={(e) => handleResourceFieldChange(index, 'url', e.target.value)}
+                        style={{
+                          background: '#1c1917',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: '#fff',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          flexGrow: 1
+                        }}
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveResourceField(index)}
+                        style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.25rem', padding: '0 4px' }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  {sessionResources.length === 0 && (
+                    <span style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>No resources added yet.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Practice Links Sub-form */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Practice Links</label>
+                  <Button type="button" size="sm" variant="secondary" onClick={handleAddPracticeLinkField}>+ Add Practice Link</Button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {sessionPracticeLinks.map((link, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <select
+                        value={link.name}
+                        onChange={(e) => handlePracticeLinkFieldChange(index, 'name', e.target.value)}
+                        style={{
+                          background: '#1c1917',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: '#fff',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          width: '140px'
+                        }}
+                      >
+                        {['LeetCode', 'GeeksforGeeks', 'HackerRank', 'CodeChef', 'Codeforces', 'AtCoder', 'Worksheet', 'Homework', 'Custom'].map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                      
+                      <input
+                        type="text"
+                        placeholder="Practice URL (e.g., https://...)"
+                        value={link.url}
+                        onChange={(e) => handlePracticeLinkFieldChange(index, 'url', e.target.value)}
+                        style={{
+                          background: '#1c1917',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: '#fff',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          flexGrow: 1
+                        }}
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePracticeLinkField(index)}
+                        style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.25rem', padding: '0 4px' }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  {sessionPracticeLinks.length === 0 && (
+                    <span style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic' }}>No practice links added yet.</span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+                <Button type="button" variant="secondary" onClick={() => setSessionModal({ open: false, mode: 'create', moduleId: null, data: null })}>Cancel</Button>
                 <Button type="submit">Save Session</Button>
               </div>
             </form>
@@ -1139,9 +2636,9 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       {/* 4. QUESTION FORM MODAL */}
       {questionModal.open && (
         <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d', maxWidth: '650px' }}>
+          <div className="modal-content glass-container" style={{ background: '#121111', maxWidth: '650px' }}>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '20px' }}>
-              {questionModal.mode === 'create' ? 'Add MCQ Question' : 'Edit MCQ Question'}
+              {questionModal.mode === 'create' ? 'Add New Question' : 'Edit Question Details'}
             </h2>
             
             <form onSubmit={handleSaveQuestion}>
@@ -1152,26 +2649,87 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 rows="3"
                 defaultValue={questionModal.mode === 'edit' ? questionModal.data.questionText : ''}
                 required
-                placeholder="Write the MCQ question here..."
+                placeholder="Write the question prompt here..."
               />
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <Input label="Option A" id="optionA" name="optionA" defaultValue={questionModal.mode === 'edit' ? questionModal.data.options[0] : ''} required />
-                <Input label="Option B" id="optionB" name="optionB" defaultValue={questionModal.mode === 'edit' ? questionModal.data.options[1] : ''} required />
-                <Input label="Option C" id="optionC" name="optionC" defaultValue={questionModal.mode === 'edit' ? questionModal.data.options[2] : ''} required />
-                <Input label="Option D" id="optionD" name="optionD" defaultValue={questionModal.mode === 'edit' ? questionModal.data.options[3] : ''} required />
+              {/* Question Type Selector */}
+              <div style={{ marginBottom: '16px' }}>
+                <label>Question Type</label>
+                <select 
+                  value={selectedQType}
+                  onChange={e => setSelectedQType(e.target.value)}
+                  style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <option value="MCQ">Multiple Choice Question (MCQ)</option>
+                  <option value="TF">True / False</option>
+                  <option value="FILL_BLANK">Fill in the Blank</option>
+                  <option value="DESCRIPTIVE">Descriptive / Model Answer</option>
+                </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <Input
-                  label="Correct Answer Text"
-                  id="correctAnswer"
-                  name="correctAnswer"
-                  defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
-                  required
-                  placeholder="Must match one option EXACTLY"
-                />
+              {selectedQType === 'MCQ' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    <Input label="Option A" id="optionA" name="optionA" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[0] : ''} required />
+                    <Input label="Option B" id="optionB" name="optionB" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[1] : ''} required />
+                    <Input label="Option C" id="optionC" name="optionC" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[2] : ''} required />
+                    <Input label="Option D" id="optionD" name="optionD" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[3] : ''} required />
+                  </div>
+                  
+                  <Input
+                    label="Correct Answer Text"
+                    id="correctAnswer"
+                    name="correctAnswer"
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                    required
+                    placeholder="Must match Option A, B, C, or D exactly"
+                  />
+                </>
+              )}
 
+              {selectedQType === 'TF' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="correctAnswerTF">Correct Answer</label>
+                  <select 
+                    id="correctAnswerTF" 
+                    name="correctAnswerTF" 
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : 'True'}
+                    style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    <option value="True">True</option>
+                    <option value="False">False</option>
+                  </select>
+                </div>
+              )}
+
+              {selectedQType === 'FILL_BLANK' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <Input
+                    label="Correct Answer Text"
+                    id="correctAnswerBlank"
+                    name="correctAnswerBlank"
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                    required
+                    placeholder="Provide the exact term or text to match"
+                  />
+                </div>
+              )}
+
+              {selectedQType === 'DESCRIPTIVE' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <Textarea
+                    label="Model Answer / Standard Key Points"
+                    id="correctAnswerDesc"
+                    name="correctAnswerDesc"
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                    required
+                    rows="3"
+                    placeholder="Standard answer guide text..."
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', marginBottom: '16px' }}>
                 <Select
                   label="Difficulty"
                   id="difficultyLevel"
@@ -1202,7 +2760,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 placeholder="Step-by-step solution details..."
               />
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
                 <Button variant="secondary" onClick={() => setQuestionModal({ open: false, mode: 'create', moduleId: null, data: null })}>Cancel</Button>
                 <Button type="submit">Save Question</Button>
               </div>
@@ -1211,43 +2769,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         </div>
       )}
 
-      {/* 5. ADD RESOURCE MODAL */}
-      {resourceModal.open && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '20px' }}>Add Downloadable Resource</h2>
-            <form onSubmit={handleAddResource}>
-              <Input label="Material / File Name" id="name" name="name" required placeholder="e.g. Lecture Notes PDF, GitHub Code Repo" />
-              <Input label="Link URL" id="url" name="url" type="url" required placeholder="https://example.com/file" />
-              
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <Button variant="secondary" onClick={() => setResourceModal({ open: false, sessionId: null })}>Cancel</Button>
-                <Button type="submit">Add Resource</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 6. ADD PRACTICE LINK MODAL */}
-      {practiceModal.open && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-container" style={{ background: '#12141d' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '20px' }}>Add Practice Link</h2>
-            <form onSubmit={handleAddPractice}>
-              <Input label="Task / Platform Title" id="name" name="name" required placeholder="e.g. LeetCode #1, HackerRank Quiz" />
-              <Input label="Task URL" id="url" name="url" type="url" required placeholder="https://leetcode.com/..." />
-              
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <Button variant="secondary" onClick={() => setPracticeModal({ open: false, sessionId: null })}>Cancel</Button>
-                <Button type="submit">Add Practice Link</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Reusable Confirm Dialog */}
+      {/* Centralized Confirm Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.open}
         title={confirmDialog.title}
@@ -1255,6 +2777,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
         variant={confirmDialog.variant}
+        confirmText={confirmDialog.confirmText}
       />
 
     </div>

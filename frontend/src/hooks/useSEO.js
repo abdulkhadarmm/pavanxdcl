@@ -10,11 +10,9 @@ export function useSEO({
   structuredData
 } = {}) {
   useEffect(() => {
-    // 1. Title
     const finalTitle = title ? `${title} | ${siteConfig.shortName}` : siteConfig.seo.defaultTitle;
     document.title = finalTitle;
 
-    // Helper to find or create meta tag
     const setMeta = (name, property, content) => {
       if (!content) return;
       let selector = '';
@@ -31,25 +29,21 @@ export function useSEO({
       el.setAttribute('content', content);
     };
 
-    // 2. Base SEO Meta Tags
     setMeta('description', null, description || siteConfig.seo.defaultDescription);
     setMeta('keywords', null, keywords || siteConfig.seo.defaultKeywords);
-    setMeta('viewport', null, 'width=device-width, initial-scale=1.0');
     
-    // 3. Open Graph Metadata
     setMeta(null, 'og:title', title || siteConfig.companyName);
     setMeta(null, 'og:description', description || siteConfig.seo.defaultDescription);
     setMeta(null, 'og:image', ogImage || siteConfig.seo.defaultOgImage);
     setMeta(null, 'og:url', ogUrl || siteConfig.seo.siteUrl);
     setMeta(null, 'og:type', 'website');
 
-    // 4. Twitter Card Metadata
     setMeta('twitter:card', null, 'summary_large_image');
     setMeta('twitter:title', null, title || siteConfig.companyName);
     setMeta('twitter:description', null, description || siteConfig.seo.defaultDescription);
     setMeta('twitter:image', null, ogImage || siteConfig.seo.defaultOgImage);
 
-    // 5. JSON-LD Structured Data
+    // JSON-LD structured data script
     let scriptEl = document.getElementById('jsonld-seo');
     if (scriptEl) {
       scriptEl.remove();
@@ -73,9 +67,7 @@ export function useSEO({
     scriptEl.innerHTML = JSON.stringify(finalStructuredData);
     document.head.appendChild(scriptEl);
 
-    // Cleanup
     return () => {
-      // We keep standard description/keywords, but clean up structured data script
       const scriptToRemove = document.getElementById('jsonld-seo');
       if (scriptToRemove) {
         scriptToRemove.remove();

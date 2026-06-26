@@ -1,8 +1,7 @@
 import React from 'react';
 import siteConfig from '../../config/siteConfig';
 import theme from '../../config/theme';
-import Button from '../ui/Button';
-import heroImg from '../../assets/images/hero.png';
+import AnimatedCounter from './AnimatedCounter';
 
 export function Hero({
   onExploreCourses
@@ -19,182 +18,184 @@ export function Hero({
     }
   };
 
-  const handleScrollToCommunity = (e) => {
-    e.preventDefault();
-    const commSec = document.getElementById('community');
-    if (commSec) {
-      commSec.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+  const statsList = [
+    { label: 'DSA Problems', target: '500', suffix: '+' },
+    { label: 'Placement Focused', target: '100', suffix: '%' },
+    { label: 'Active Learners', target: '2000', suffix: '+' },
+    { label: 'Mentorship', target: 'Live', suffix: '', isStatic: true }
+  ];
 
   return (
     <section 
       id="hero"
       className="animate-fade-in"
       style={{
-        padding: '120px 40px 100px',
+        padding: '60px 20px 45px',
         position: 'relative',
-        overflow: 'hidden',
-        background: 'radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.08) 0%, transparent 40%)'
+        background: 'transparent',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center'
       }}
     >
-      <div 
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '40px',
-          alignItems: 'center'
-        }}
-        className="hero-grid"
-      >
-        {/* Left Col: Headings & Buttons */}
-        <div>
+
+      {/* Container */}
+      <div style={{ maxWidth: '900px', width: '100%' }}>
+        
+        {/* Top Badge/Pill */}
+        <div style={{ marginBottom: '24px' }}>
           <span 
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '6px 12px',
+              padding: '6px 16px',
               borderRadius: '9999px',
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.2)',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: '#60a5fa',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '20px'
+              background: 'rgba(249, 115, 22, 0.06)',
+              border: '1px solid rgba(249, 115, 22, 0.15)',
+              fontSize: '0.85rem',
+              fontWeight: 500,
+              color: 'var(--accent-orange)',
+              letterSpacing: '0.02em'
             }}
           >
-            🚀 Launching Your Tech Career
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-orange)' }}></span>
+            Pavan X Dhee Coding Lab — Live & Active
           </span>
-
-          <h1 
-            style={{
-              fontSize: '3.6rem',
-              fontWeight: '800',
-              lineHeight: '1.1',
-              letterSpacing: '-0.02em',
-              marginBottom: '24px',
-              background: 'linear-gradient(135deg, #ffffff 0%, #94a3b8 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
-            Welcome to <br />
-            <span style={{ background: theme.gradients.hero, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              {siteConfig.companyName}
-            </span>
-          </h1>
-
-          <p 
-            style={{
-              fontSize: '1.15rem',
-              lineHeight: '1.7',
-              color: theme.colors.textSecondary,
-              marginBottom: '36px',
-              maxWidth: '520px'
-            }}
-          >
-            Master <strong>Data Structures &amp; Algorithms (DSA)</strong>, 
-            <strong> Web Development</strong>, and <strong>Aptitude</strong>. 
-            Step into structured learning paths and dynamic assessments. Evolve from syntax to production-ready engineering.
-          </p>
-
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <Button onClick={handleScrollToCourses} size="lg">
-              Explore Courses &rarr;
-            </Button>
-            <Button onClick={handleScrollToCommunity} variant="secondary" size="lg">
-              Join Community
-            </Button>
-          </div>
         </div>
 
-        {/* Right Col: Graphic Illustration */}
+        {/* Heading */}
+        <h1 
+          style={{
+            fontSize: '4.8rem',
+            fontWeight: '900',
+            lineHeight: '1.1',
+            letterSpacing: '-0.02em',
+            marginBottom: '24px',
+            fontFamily: 'var(--font-sans)',
+            color: '#fff'
+          }}
+          className="hero-title"
+        >
+          Break the Matrix.<br />
+          Master <span style={{ color: 'var(--accent-orange)', textShadow: '0 0 40px rgba(249, 115, 22, 0.15)' }}>the Code.</span>
+        </h1>
+
+        {/* Subtitle / Description */}
+        <p 
+          style={{
+            fontSize: '1.15rem',
+            lineHeight: '1.7',
+            color: theme.colors.textSecondary,
+            marginBottom: '30px',
+            maxWidth: '720px',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            fontWeight: 400
+          }}
+        >
+          DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack
+          placements and dominate FAANG interviews with <strong>PavanxDCL</strong> mentorship.
+        </p>
+
+        {/* CTA Buttons */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          marginBottom: '45px' 
+        }}>
+          <button
+            onClick={handleScrollToCourses}
+            style={{
+              background: 'linear-gradient(135deg, #f97316 0%, #d97706 100%)',
+              color: '#fff',
+              border: 'none',
+              padding: '16px 36px',
+              fontSize: '0.98rem',
+              fontWeight: '700',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              boxShadow: '0 8px 30px rgba(249, 115, 22, 0.35)',
+              transition: 'var(--transition-smooth)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 12px 35px rgba(249, 115, 22, 0.5)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(249, 115, 22, 0.35)';
+            }}
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" style={{ marginRight: '2px' }}><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+            Scroll Down to Start Grinding ↓
+          </button>
+        </div>
+
+
+        {/* Stats Row */}
         <div 
           style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            position: 'relative'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '24px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            paddingTop: '40px',
+            width: '100%',
+            maxWidth: '850px',
+            marginLeft: 'auto',
+            marginRight: 'auto'
           }}
-          className="hero-graphic"
+          className="stats-grid"
         >
-          {/* Neon background blur nodes */}
-          <div 
-            style={{
-              position: 'absolute',
-              width: '300px',
-              height: '300px',
-              background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
-              filter: 'blur(30px)',
-              top: '-50px',
-              right: '-50px',
-              zIndex: 1
-            }}
-          />
-          <div 
-            style={{
-              position: 'absolute',
-              width: '250px',
-              height: '250px',
-              background: 'radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%)',
-              filter: 'blur(30px)',
-              bottom: '-30px',
-              left: '-30px',
-              zIndex: 1
-            }}
-          />
-
-          {/* Core Graphic */}
-          <div 
-            className="animate-float" 
-            style={{ 
-              zIndex: 2, 
-              position: 'relative',
-              borderRadius: '24px',
-              border: `1px solid ${theme.colors.border}`,
-              padding: '8px',
-              background: 'rgba(255,255,255,0.01)',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <img 
-              src={heroImg} 
-              alt={`${siteConfig.companyName} Premium Portal`} 
-              style={{
-                width: '100%',
-                maxHeight: '400px',
-                borderRadius: '16px',
-                objectFit: 'cover',
-                boxShadow: theme.shadows.premium
-              }}
-            />
-          </div>
+          {statsList.map((stat, idx) => (
+            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span 
+                style={{
+                  fontSize: '2.5rem',
+                  fontWeight: '800',
+                  color: '#fff',
+                  lineHeight: '1.2',
+                  display: 'block'
+                }}
+              >
+                {stat.isStatic ? (
+                  stat.target
+                ) : (
+                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+                )}
+              </span>
+              <span 
+                style={{ 
+                  color: '#64748b', 
+                  fontSize: '0.78rem', 
+                  fontWeight: '700', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.08em',
+                  marginTop: '8px',
+                  lineHeight: '1.3'
+                }}
+              >
+                {stat.label}
+              </span>
+            </div>
+          ))}
         </div>
+
       </div>
 
       <style>{`
         @media (max-width: 768px) {
-          .hero-grid {
-            grid-template-columns: 1fr !important;
-            text-align: center;
+          .hero-title {
+            font-size: 2.8rem !important;
           }
-          .hero-grid h1 {
-            font-size: 2.5rem !important;
-          }
-          .hero-grid p {
-            margin-left: auto;
-            margin-right: auto;
-          }
-          .hero-grid div {
-            justifyContent: center;
-          }
-          .hero-graphic {
-            margin-top: 40px;
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 32px !important;
           }
         }
       `}</style>
@@ -203,3 +204,4 @@ export function Hero({
 }
 
 export default Hero;
+

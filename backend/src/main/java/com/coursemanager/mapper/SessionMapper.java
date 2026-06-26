@@ -10,7 +10,9 @@ import com.coursemanager.entity.PracticeLink;
 import com.coursemanager.entity.Resource;
 import com.coursemanager.entity.Session;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class SessionMapper {
@@ -79,6 +81,31 @@ public class SessionMapper {
         session.setSessionCode(request.getSessionCode());
         session.setContentTitle(request.getContentTitle());
         session.setImportanceLevel(request.getImportanceLevel() == null ? "MEDIUM" : request.getImportanceLevel());
+
+        if (request.getResources() != null) {
+            List<Resource> resources = request.getResources().stream()
+                .map(req -> {
+                    Resource r = new Resource();
+                    r.setName(req.getName());
+                    r.setUrl(req.getUrl());
+                    r.setSession(session);
+                    return r;
+                }).collect(Collectors.toList());
+            session.setResources(resources);
+        }
+
+        if (request.getPracticeLinks() != null) {
+            List<PracticeLink> links = request.getPracticeLinks().stream()
+                .map(req -> {
+                    PracticeLink l = new PracticeLink();
+                    l.setName(req.getName());
+                    l.setUrl(req.getUrl());
+                    l.setSession(session);
+                    return l;
+                }).collect(Collectors.toList());
+            session.setPracticeLinks(links);
+        }
+
         return session;
     }
 
@@ -110,6 +137,38 @@ public class SessionMapper {
         session.setContentTitle(request.getContentTitle());
         if (request.getImportanceLevel() != null) {
             session.setImportanceLevel(request.getImportanceLevel());
+        }
+
+        // Sync resources
+        if (session.getResources() != null) {
+            session.getResources().clear();
+        } else {
+            session.setResources(new ArrayList<>());
+        }
+        if (request.getResources() != null) {
+            for (ResourceRequest req : request.getResources()) {
+                Resource resource = new Resource();
+                resource.setName(req.getName());
+                resource.setUrl(req.getUrl());
+                resource.setSession(session);
+                session.getResources().add(resource);
+            }
+        }
+
+        // Sync practice links
+        if (session.getPracticeLinks() != null) {
+            session.getPracticeLinks().clear();
+        } else {
+            session.setPracticeLinks(new ArrayList<>());
+        }
+        if (request.getPracticeLinks() != null) {
+            for (PracticeLinkRequest req : request.getPracticeLinks()) {
+                PracticeLink link = new PracticeLink();
+                link.setName(req.getName());
+                link.setUrl(req.getUrl());
+                link.setSession(session);
+                session.getPracticeLinks().add(link);
+            }
         }
     }
 }

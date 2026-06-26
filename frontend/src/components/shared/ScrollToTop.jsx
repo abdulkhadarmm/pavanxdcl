@@ -34,36 +34,53 @@ export function ScrollToTop() {
         position: 'fixed',
         bottom: '30px',
         right: '30px',
-        width: '44px',
-        height: '44px',
+        width: '46px',
+        height: '46px',
         borderRadius: '50%',
-        background: 'rgba(18, 20, 29, 0.85)',
-        backdropFilter: 'blur(10px)',
-        border: `1px solid ${theme.colors.border}`,
-        boxShadow: 'var(--shadow-premium)',
-        color: '#fff',
+        background: 'rgba(18, 17, 17, 0.8)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+        color: '#94a3b8',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 999,
-        transition: theme.transitions.smooth,
-        fontSize: '1.2rem',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         outline: 'none'
       }}
       onMouseOver={(e) => {
-        e.currentTarget.style.background = 'var(--theme-grad, linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%))';
-        e.currentTarget.style.transform = 'translateY(-3px)';
-        e.currentTarget.style.boxShadow = '0 10px 20px -5px rgba(59, 130, 246, 0.4)';
+        e.currentTarget.style.background = 'linear-gradient(135deg, #f97316 0%, #ff7a00 100%)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+        e.currentTarget.style.color = '#ffffff';
+        e.currentTarget.style.transform = 'translateY(-4px)';
+        e.currentTarget.style.boxShadow = '0 8px 20px rgba(249, 115, 22, 0.35)';
       }}
       onMouseOut={(e) => {
-        e.currentTarget.style.background = 'rgba(18, 20, 29, 0.85)';
+        e.currentTarget.style.background = 'rgba(18, 17, 17, 0.8)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        e.currentTarget.style.color = '#94a3b8';
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-premium)';
+        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4)';
       }}
       aria-label="Scroll to top"
     >
-      ▲
+      <svg 
+        style={{ 
+          width: '18px', 
+          height: '18px', 
+          fill: 'none', 
+          stroke: 'currentColor', 
+          strokeWidth: 3, 
+          strokeLinecap: 'round', 
+          strokeLinejoin: 'round',
+          transition: 'transform 0.3s ease'
+        }} 
+        viewBox="0 0 24 24"
+      >
+        <polyline points="18 15 12 9 6 15" />
+      </svg>
     </button>
   );
 }

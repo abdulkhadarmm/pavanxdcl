@@ -31,10 +31,10 @@ export function Button({
       case 'primary':
       default:
         return {
-          background: 'var(--theme-grad, linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%))',
+          background: 'var(--theme-grad, linear-gradient(135deg, #f97316 0%, #ff7a00 100%))',
           color: '#fff',
           border: 'none',
-          boxShadow: '0 4px 14px 0 var(--theme-glow, rgba(59, 130, 246, 0.3))',
+          boxShadow: '0 4px 14px 0 var(--theme-glow, rgba(249, 115, 22, 0.3))',
         };
     }
   };

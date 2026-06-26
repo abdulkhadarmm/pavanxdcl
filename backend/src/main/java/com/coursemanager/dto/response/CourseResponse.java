@@ -7,7 +7,8 @@ public class CourseResponse {
     private String name;
     private String description;
     private CourseType courseType;
-    private String colorTheme;
+    private String primaryColor;
+    private String secondaryColor;
     private int displayOrder;
     private boolean deleted;
 
@@ -43,12 +44,20 @@ public class CourseResponse {
         this.courseType = courseType;
     }
 
-    public String getColorTheme() {
-        return colorTheme;
+    public String getPrimaryColor() {
+        return primaryColor;
     }
 
-    public void setColorTheme(String colorTheme) {
-        this.colorTheme = colorTheme;
+    public void setPrimaryColor(String primaryColor) {
+        this.primaryColor = primaryColor;
+    }
+
+    public String getSecondaryColor() {
+        return secondaryColor;
+    }
+
+    public void setSecondaryColor(String secondaryColor) {
+        this.secondaryColor = secondaryColor;
     }
 
     public int getDisplayOrder() {

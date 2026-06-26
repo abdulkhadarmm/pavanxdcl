@@ -2,17 +2,9 @@ import React from 'react';
 import useSEO from '../hooks/useSEO';
 import Navbar from '../components/landing/Navbar';
 import Hero from '../components/landing/Hero';
-import Stats from '../components/landing/Stats';
-import Features from '../components/landing/Features';
-import WhyChooseUs from '../components/landing/WhyChooseUs';
 import CourseSection from '../components/landing/CourseSection';
 import CommunitySection from '../components/landing/CommunitySection';
-import FutureSections from '../components/landing/FutureSections';
-import Testimonials from '../components/landing/Testimonials';
-import FAQ from '../components/landing/FAQ';
-import CTASection from '../components/landing/CTASection';
 import Footer from '../components/landing/Footer';
-import AboutSection from '../components/landing/AboutSection';
 import ScrollToTop from '../components/shared/ScrollToTop';
 
 export function LandingPage({
@@ -31,27 +23,53 @@ export function LandingPage({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden' }}>
-      <Navbar currentView={currentView} onViewChange={onViewChange} />
-      
-      <main style={{ flexGrow: 1 }}>
-        <Hero onExploreCourses={handleExploreCourses} />
-        <Stats />
-        <AboutSection />
-        <WhyChooseUs />
-        <Features />
-        <CourseSection onSelectCourse={onSelectCourse} />
-        <FutureSections />
-        <CommunitySection />
-        <Testimonials />
-        <FAQ />
-        <CTASection onExploreCourses={handleExploreCourses} />
-      </main>
+    <div style={{ 
+      position: 'relative',
+      display: 'flex', 
+      flexDirection: 'column', 
+      minHeight: '100vh', 
+      overflowX: 'hidden',
+      backgroundColor: '#070605'
+    }}>
+      {/* Background Glow Blobs (Fixed in screen viewport) */}
+      <div style={{
+        position: 'fixed',
+        top: '-10%',
+        left: '60%',
+        width: '60vw',
+        height: '60vw',
+        background: 'radial-gradient(circle, rgba(249, 115, 22, 0.35) 0%, rgba(249, 115, 22, 0) 80%)',
+        filter: 'blur(100px)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+      <div style={{
+        position: 'fixed',
+        top: '40%',
+        left: '-10%',
+        width: '70vw',
+        height: '70vw',
+        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(139, 92, 246, 0) 80%)',
+        filter: 'blur(110px)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
 
-      <Footer />
-      <ScrollToTop />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Navbar currentView={currentView} onViewChange={onViewChange} />
+        
+        <main style={{ flexGrow: 1 }}>
+          <Hero onExploreCourses={handleExploreCourses} />
+          <CourseSection onSelectCourse={onSelectCourse} />
+          <CommunitySection />
+        </main>
+
+        <Footer />
+        <ScrollToTop />
+      </div>
     </div>
   );
 }
 
 export default LandingPage;
+

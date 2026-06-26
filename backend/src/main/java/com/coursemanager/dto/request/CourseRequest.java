@@ -16,8 +16,11 @@ public class CourseRequest {
     @NotNull(message = "Course type is required")
     private CourseType courseType;
 
-    @Size(max = 50, message = "Color theme cannot exceed 50 characters")
-    private String colorTheme;
+    @Size(max = 50, message = "Primary color cannot exceed 50 characters")
+    private String primaryColor;
+
+    @Size(max = 50, message = "Secondary color cannot exceed 50 characters")
+    private String secondaryColor;
 
     public String getName() {
         return name;
@@ -43,11 +46,19 @@ public class CourseRequest {
         this.courseType = courseType;
     }
 
-    public String getColorTheme() {
-        return colorTheme;
+    public String getPrimaryColor() {
+        return primaryColor;
     }
 
-    public void setColorTheme(String colorTheme) {
-        this.colorTheme = colorTheme;
+    public void setPrimaryColor(String primaryColor) {
+        this.primaryColor = primaryColor;
+    }
+
+    public String getSecondaryColor() {
+        return secondaryColor;
+    }
+
+    public void setSecondaryColor(String secondaryColor) {
+        this.secondaryColor = secondaryColor;
     }
 }

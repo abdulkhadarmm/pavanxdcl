@@ -25,6 +25,8 @@ public class Session {
     @Column(name = "importance_level", length = 20)
     private String importanceLevel = "MEDIUM";
 
+
+
     @Column(name = "display_order")
     private int displayOrder = 0;
 
@@ -121,4 +123,6 @@ public class Session {
     public void setPracticeLinks(List<PracticeLink> practiceLinks) {
         this.practiceLinks = practiceLinks;
     }
+
+
 }

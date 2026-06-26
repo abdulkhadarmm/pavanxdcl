@@ -13,6 +13,7 @@ public class SessionResponse {
     private List<ResourceResponse> resources;
     private List<PracticeLinkResponse> practiceLinks;
 
+
     public Long getId() {
         return id;
     }
@@ -84,4 +85,6 @@ public class SessionResponse {
     public void setPracticeLinks(List<PracticeLinkResponse> practiceLinks) {
         this.practiceLinks = practiceLinks;
     }
+
+
 }

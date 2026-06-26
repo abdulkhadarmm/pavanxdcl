@@ -20,8 +20,11 @@ public class Course {
     @Column(name = "course_type", nullable = false, length = 50)
     private CourseType courseType;
 
-    @Column(name = "color_theme", length = 50)
-    private String colorTheme = "blue";
+    @Column(name = "primary_color", length = 50)
+    private String primaryColor = "#8b5cf6";
+
+    @Column(name = "secondary_color", length = 50)
+    private String secondaryColor = "#d946ef";
 
     @Column(name = "display_order")
     private int displayOrder = 0;
@@ -32,12 +35,13 @@ public class Course {
     public Course() {
     }
 
-    public Course(Long id, String name, String description, CourseType courseType, String colorTheme, int displayOrder, boolean deleted) {
+    public Course(Long id, String name, String description, CourseType courseType, String primaryColor, String secondaryColor, int displayOrder, boolean deleted) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.courseType = courseType;
-        this.colorTheme = colorTheme;
+        this.primaryColor = primaryColor;
+        this.secondaryColor = secondaryColor;
         this.displayOrder = displayOrder;
         this.deleted = deleted;
     }
@@ -74,12 +78,20 @@ public class Course {
         this.courseType = courseType;
     }
 
-    public String getColorTheme() {
-        return colorTheme;
+    public String getPrimaryColor() {
+        return primaryColor;
     }
 
-    public void setColorTheme(String colorTheme) {
-        this.colorTheme = colorTheme;
+    public void setPrimaryColor(String primaryColor) {
+        this.primaryColor = primaryColor;
+    }
+
+    public String getSecondaryColor() {
+        return secondaryColor;
+    }
+
+    public void setSecondaryColor(String secondaryColor) {
+        this.secondaryColor = secondaryColor;
     }
 
     public int getDisplayOrder() {
