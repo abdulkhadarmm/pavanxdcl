@@ -3,50 +3,96 @@ import { ToastProvider } from './context/ToastContext';
 import LandingPage from './pages/LandingPage';
 import CourseWorkspace from './pages/CourseWorkspace';
 import AdminDashboard from './pages/AdminDashboard';
+import courseService from './services/courseService';
 
 function App() {
   const [view, setView] = useState('public'); // 'public' | 'admin'
   const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const [courses, setCourses] = useState([]);
+
+  const getSlug = (name) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+  };
 
   useEffect(() => {
-    const handleRouteChange = () => {
-      const path = window.location.pathname;
-      const isPathAdmin = path === '/admin';
-      const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
-      
-      if (isPathAdmin || isHashAdmin) {
-        setView('admin');
-      } else {
-        setView('public');
+    const initAndRegisterRoute = async () => {
+      let fetchedCourses = [];
+      try {
+        fetchedCourses = await courseService.getCourses();
+        setCourses(fetchedCourses || []);
+      } catch (err) {
+        console.error("Failed to load courses on mount:", err);
+      }
+
+      const handleRouteChange = () => {
+        const path = window.location.pathname;
+        const isPathAdmin = path === '/admin' || path === '/admin/';
+        const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
         
-        if (window.location.hash === '#hero') {
-          window.history.replaceState(null, '', path);
-        }
-        
-        const courseMatch = path.match(/^\/course\/([^/]+)/);
-        if (courseMatch) {
-          const courseIdStr = courseMatch[1];
-          const courseId = isNaN(courseIdStr) ? courseIdStr : Number(courseIdStr);
-          setSelectedCourseId(courseId);
+        if (isPathAdmin || isHashAdmin) {
+          setView('admin');
         } else {
+          setView('public');
+          
+          if (window.location.hash === '#hero') {
+            window.history.replaceState(null, '', path);
+          }
+          
+          const slug = path.replace(/^\/+|\/+$/g, '');
+          if (slug) {
+            const matched = fetchedCourses.find(c => getSlug(c.name) === slug);
+            if (matched) {
+              setSelectedCourseId(matched.id);
+              return;
+            }
+          }
           setSelectedCourseId(null);
         }
-      }
+      };
+
+      window.addEventListener('hashchange', handleRouteChange);
+      window.addEventListener('popstate', handleRouteChange);
+      handleRouteChange(); // run on load
+      
+      return () => {
+        window.removeEventListener('hashchange', handleRouteChange);
+        window.removeEventListener('popstate', handleRouteChange);
+      };
     };
-    
-    window.addEventListener('hashchange', handleRouteChange);
-    window.addEventListener('popstate', handleRouteChange);
-    handleRouteChange(); // check initial route on load
-    
+
+    let cleanupFn;
+    initAndRegisterRoute().then(cleanup => {
+      cleanupFn = cleanup;
+    });
+
     return () => {
-      window.removeEventListener('hashchange', handleRouteChange);
-      window.removeEventListener('popstate', handleRouteChange);
+      if (cleanupFn) cleanupFn();
     };
   }, []);
 
-  const handleSelectCourse = (courseId) => {
+  const handleSelectCourse = async (courseId) => {
     setSelectedCourseId(courseId);
-    window.history.pushState({}, '', `/course/${courseId}`);
+    let list = courses;
+    let course = list.find(c => c.id === courseId);
+    if (!course) {
+      try {
+        const fetched = await courseService.getCourses();
+        setCourses(fetched || []);
+        list = fetched || [];
+        course = list.find(c => c.id === courseId);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (course) {
+      window.history.pushState({}, '', `/${getSlug(course.name)}`);
+    } else {
+      window.history.pushState({}, '', `/course/${courseId}`);
+    }
   };
 
   const handleClearCourse = () => {
