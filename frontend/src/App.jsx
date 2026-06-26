@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import PublicPortal from './pages/PublicPortal';
+import { ToastProvider } from './context/ToastContext';
+import LandingPage from './pages/LandingPage';
+import CourseWorkspace from './pages/CourseWorkspace';
 import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
@@ -15,64 +17,34 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      
-      {/* Navigation Header */}
-      <header className="nav-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={handleClearCourse}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.1rem', color: '#fff' }}>
-            C
-          </div>
-          <span style={{ fontSize: '1.25rem', fontWeight: '700', letterSpacing: '-0.02em' }}>
-            EduFlow <span style={{ fontWeight: '400', opacity: 0.6, fontSize: '0.85rem' }}>Platform</span>
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <button 
-            className={`btn ${view === 'public' ? 'btn-primary accent-blue' : 'btn-secondary'}`}
-            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-            onClick={() => {
-              setView('public');
-              handleClearCourse();
-            }}
-          >
-            Public Site
-          </button>
-          
-          <button 
-            className={`btn ${view === 'admin' ? 'btn-primary accent-blue' : 'btn-secondary'}`}
-            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-            onClick={() => {
-              setView('admin');
-              handleClearCourse();
-            }}
-          >
-            Admin Panel
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main style={{ flexGrow: 1 }}>
-        {view === 'public' ? (
-          <PublicPortal 
-            onViewAdmin={() => setView('admin')}
-            selectedCourseId={selectedCourseId}
-            onSelectCourse={handleSelectCourse}
-            onClearCourse={handleClearCourse}
+    <ToastProvider>
+      {view === 'public' ? (
+        selectedCourseId === null ? (
+          <LandingPage 
+            onSelectCourse={handleSelectCourse} 
+            currentView={view}
+            onViewChange={setView}
           />
         ) : (
-          <AdminDashboard 
-            onViewPublic={() => setView('public')}
-            selectedCourseId={selectedCourseId}
-            onSelectCourse={handleSelectCourse}
-            onClearCourse={handleClearCourse}
+          <CourseWorkspace 
+            courseId={selectedCourseId} 
+            onBack={handleClearCourse}
+            currentView={view}
+            onViewChange={setView}
           />
-        )}
-      </main>
-
-    </div>
+        )
+      ) : (
+        <AdminDashboard 
+          onViewPublic={() => {
+            setView('public');
+            handleClearCourse();
+          }}
+          selectedCourseId={selectedCourseId}
+          onSelectCourse={handleSelectCourse}
+          onClearCourse={handleClearCourse}
+        />
+      )}
+    </ToastProvider>
   );
 }
 
