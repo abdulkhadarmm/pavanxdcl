@@ -1,122 +1,79 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import React, { useState } from 'react';
+import PublicPortal from './pages/PublicPortal';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [view, setView] = useState('public'); // 'public' | 'admin'
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
+
+  const handleSelectCourse = (courseId) => {
+    setSelectedCourseId(courseId);
+  };
+
+  const handleClearCourse = () => {
+    setSelectedCourseId(null);
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      
+      {/* Navigation Header */}
+      <header className="nav-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={handleClearCourse}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.1rem', color: '#fff' }}>
+            C
+          </div>
+          <span style={{ fontSize: '1.25rem', fontWeight: '700', letterSpacing: '-0.02em' }}>
+            EduFlow <span style={{ fontWeight: '400', opacity: 0.6, fontSize: '0.85rem' }}>Platform</span>
+          </span>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <button 
+            className={`btn ${view === 'public' ? 'btn-primary accent-blue' : 'btn-secondary'}`}
+            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+            onClick={() => {
+              setView('public');
+              handleClearCourse();
+            }}
+          >
+            Public Site
+          </button>
+          
+          <button 
+            className={`btn ${view === 'admin' ? 'btn-primary accent-blue' : 'btn-secondary'}`}
+            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+            onClick={() => {
+              setView('admin');
+              handleClearCourse();
+            }}
+          >
+            Admin Panel
+          </button>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {/* Main Content Area */}
+      <main style={{ flexGrow: 1 }}>
+        {view === 'public' ? (
+          <PublicPortal 
+            onViewAdmin={() => setView('admin')}
+            selectedCourseId={selectedCourseId}
+            onSelectCourse={handleSelectCourse}
+            onClearCourse={handleClearCourse}
+          />
+        ) : (
+          <AdminDashboard 
+            onViewPublic={() => setView('public')}
+            selectedCourseId={selectedCourseId}
+            onSelectCourse={handleSelectCourse}
+            onClearCourse={handleClearCourse}
+          />
+        )}
+      </main>
+
+    </div>
+  );
 }
 
-export default App
+export default App;
