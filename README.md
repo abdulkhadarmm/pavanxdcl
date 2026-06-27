@@ -47,8 +47,8 @@ PavanXDcl/
 1. **MySQL Setup**:
    Ensure MySQL server is running locally on port `3306`.
    Use the default database credentials:
-   - **User**: `root`
-   - **Password**: `root`
+   - **User**: ``
+   - **Password**: ``
 
 2. **Database Schema Initialization**:
    The Spring Boot application automatically creates the database and initializes the tables using Hibernate's `ddl-auto=update` configuration.
