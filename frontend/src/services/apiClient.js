@@ -14,7 +14,9 @@ export async function handleResponse(response) {
     } catch (e) {
       // response was not JSON
     }
-    const message = errorData && errorData.message ? errorData.message : 'An unexpected error occurred';
+    const message = errorData 
+      ? (errorData.errors || errorData.message || 'An unexpected error occurred') 
+      : 'An unexpected error occurred';
     throw new Error(message);
   }
   if (response.status === 204) {
