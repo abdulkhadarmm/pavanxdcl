@@ -714,30 +714,35 @@ export function CourseWorkspace({
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                   <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                                    Question {qIdx + 1} • <span style={{ color: 'var(--theme-color)', textTransform: 'uppercase' }}>{qType.replace('_', ' ')}</span>
+                                    Question {qIdx + 1} {course.courseType !== 'QUESTION_BANK' && `• ${qType.replace('_', ' ')}`}
                                   </span>
-                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    {cleanTags.map(tag => (
-                                      <span key={tag} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '2px 8px', borderRadius: '4px', color: '#94a3b8' }}>
-                                        #{tag}
+                                  {course.courseType !== 'QUESTION_BANK' && (
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                      {cleanTags.map(tag => (
+                                        <span key={tag} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '2px 8px', borderRadius: '4px', color: '#94a3b8' }}>
+                                          #{tag}
+                                        </span>
+                                      ))}
+                                      <span style={{
+                                        background: question.difficultyLevel === 'EASY' ? 'rgba(16, 185, 129, 0.08)' : question.difficultyLevel === 'HARD' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                                        color: question.difficultyLevel === 'EASY' ? '#10b981' : question.difficultyLevel === 'HARD' ? '#f87171' : '#fbbf24',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700
+                                      }}>
+                                        {question.difficultyLevel || 'MEDIUM'}
                                       </span>
-                                    ))}
-                                    <span style={{
-                                      background: question.difficultyLevel === 'EASY' ? 'rgba(16, 185, 129, 0.08)' : question.difficultyLevel === 'HARD' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-                                      color: question.difficultyLevel === 'EASY' ? '#10b981' : question.difficultyLevel === 'HARD' ? '#f87171' : '#fbbf24',
-                                      padding: '2px 8px',
-                                      borderRadius: '4px',
-                                      fontSize: '0.72rem',
-                                      fontWeight: 700
-                                    }}>
-                                      {question.difficultyLevel || 'MEDIUM'}
-                                    </span>
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
 
-                                <p style={{ fontSize: '1.05rem', fontWeight: '500', color: '#fff', marginBottom: '20px', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
+                                <p style={{ fontSize: '1.05rem', fontWeight: '500', color: '#fff', marginBottom: course.courseType === 'QUESTION_BANK' ? '0px' : '20px', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
                                   {question.questionText}
                                 </p>
+
+                                {course.courseType !== 'QUESTION_BANK' && (
+                                  <>
 
                                 {/* Render choices or inputs based on type */}
                                 
@@ -998,7 +1003,9 @@ export function CourseWorkspace({
                                     {question.explanation || 'No step-by-step solution provided.'}
                                   </div>
                                 )}
-                              </div>
+                              </>
+                              )}
+                            </div>
                             );
                           })}
                           {contentList.length === 0 && (

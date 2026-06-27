@@ -829,7 +829,9 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
 
   // Open Question Modal with selected question type detection
   const openQuestionModal = (mode, moduleId, data = null) => {
-    if (mode === 'edit' && data) {
+    if (activeCourse?.courseType === 'QUESTION_BANK') {
+      setSelectedQType('DESCRIPTIVE');
+    } else if (mode === 'edit' && data) {
       const tagsStr = data.tags || '';
       if (tagsStr.includes('type_tf')) {
         setSelectedQType('TF');
@@ -850,46 +852,51 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const handleSaveQuestion = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const isQuestionBank = activeCourse?.courseType === 'QUESTION_BANK';
     
     // Determine options based on selected question type
     let finalOptions = [];
     let finalCorrectAnswer = '';
-    if (selectedQType === 'MCQ') {
-      finalOptions = [
-        formData.get('optionA') || '',
-        formData.get('optionB') || '',
-        formData.get('optionC') || '',
-        formData.get('optionD') || ''
-      ];
-      finalCorrectAnswer = formData.get('correctAnswer') || '';
-    } else if (selectedQType === 'TF') {
-      finalOptions = ['True', 'False'];
-      finalCorrectAnswer = formData.get('correctAnswerTF') || 'True';
-    } else if (selectedQType === 'FILL_BLANK') {
-      finalOptions = [];
-      finalCorrectAnswer = formData.get('correctAnswerBlank') || '';
-    } else if (selectedQType === 'DESCRIPTIVE') {
-      finalOptions = [];
-      finalCorrectAnswer = formData.get('correctAnswerDesc') || '';
+    let finalQType = isQuestionBank ? 'DESCRIPTIVE' : selectedQType;
+    
+    if (!isQuestionBank) {
+      if (selectedQType === 'MCQ') {
+        finalOptions = [
+          formData.get('optionA') || '',
+          formData.get('optionB') || '',
+          formData.get('optionC') || '',
+          formData.get('optionD') || ''
+        ];
+        finalCorrectAnswer = formData.get('correctAnswer') || '';
+      } else if (selectedQType === 'TF') {
+        finalOptions = ['True', 'False'];
+        finalCorrectAnswer = formData.get('correctAnswerTF') || 'True';
+      } else if (selectedQType === 'FILL_BLANK') {
+        finalOptions = [];
+        finalCorrectAnswer = formData.get('correctAnswerBlank') || '';
+      } else if (selectedQType === 'DESCRIPTIVE') {
+        finalOptions = [];
+        finalCorrectAnswer = formData.get('correctAnswerDesc') || '';
+      }
     }
 
     // Append type tag to user tags
-    const userTags = formData.get('tags') || '';
+    const userTags = isQuestionBank ? '' : (formData.get('tags') || '');
     const cleanUserTags = userTags.split(',')
       .map(t => t.trim())
       .filter(t => t && !t.startsWith('type_'))
       .join(', ');
     
-    const typeIndicator = `type_${selectedQType.toLowerCase()}`;
+    const typeIndicator = `type_${finalQType.toLowerCase()}`;
     const finalTags = cleanUserTags ? `${cleanUserTags}, ${typeIndicator}` : typeIndicator;
 
     const payload = {
       questionText: formData.get('questionText'),
       options: finalOptions,
       correctAnswer: finalCorrectAnswer,
-      difficultyLevel: formData.get('difficultyLevel'),
+      difficultyLevel: isQuestionBank ? 'MEDIUM' : (formData.get('difficultyLevel') || 'MEDIUM'),
       tags: finalTags,
-      explanation: formData.get('explanation')
+      explanation: isQuestionBank ? '' : (formData.get('explanation') || '')
     };
     const moduleId = questionModal.moduleId;
 
@@ -2773,113 +2780,117 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 placeholder="Write the question prompt here..."
               />
 
-              {/* Question Type Selector */}
-              <div style={{ marginBottom: '16px' }}>
-                <label>Question Type</label>
-                <select 
-                  value={selectedQType}
-                  onChange={e => setSelectedQType(e.target.value)}
-                  style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
-                >
-                  <option value="MCQ">Multiple Choice Question (MCQ)</option>
-                  <option value="TF">True / False</option>
-                  <option value="FILL_BLANK">Fill in the Blank</option>
-                  <option value="DESCRIPTIVE">Descriptive / Model Answer</option>
-                </select>
-              </div>
-
-              {selectedQType === 'MCQ' && (
+              {activeCourse?.courseType !== 'QUESTION_BANK' && (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                    <Input label="Option A" id="optionA" name="optionA" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[0] : ''} required />
-                    <Input label="Option B" id="optionB" name="optionB" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[1] : ''} required />
-                    <Input label="Option C" id="optionC" name="optionC" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[2] : ''} required />
-                    <Input label="Option D" id="optionD" name="optionD" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[3] : ''} required />
+                  {/* Question Type Selector */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label>Question Type</label>
+                    <select 
+                      value={selectedQType}
+                      onChange={e => setSelectedQType(e.target.value)}
+                      style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      <option value="MCQ">Multiple Choice Question (MCQ)</option>
+                      <option value="TF">True / False</option>
+                      <option value="FILL_BLANK">Fill in the Blank</option>
+                      <option value="DESCRIPTIVE">Descriptive / Model Answer</option>
+                    </select>
                   </div>
-                  
+
+                  {selectedQType === 'MCQ' && (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                        <Input label="Option A" id="optionA" name="optionA" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[0] : ''} required />
+                        <Input label="Option B" id="optionB" name="optionB" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[1] : ''} required />
+                        <Input label="Option C" id="optionC" name="optionC" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[2] : ''} required />
+                        <Input label="Option D" id="optionD" name="optionD" defaultValue={questionModal.mode === 'edit' && questionModal.data.options ? questionModal.data.options[3] : ''} required />
+                      </div>
+                      
+                      <Input
+                        label="Correct Answer Text"
+                        id="correctAnswer"
+                        name="correctAnswer"
+                        defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                        required
+                        placeholder="Must match Option A, B, C, or D exactly"
+                      />
+                    </>
+                  )}
+
+                  {selectedQType === 'TF' && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <label htmlFor="correctAnswerTF">Correct Answer</label>
+                      <select 
+                        id="correctAnswerTF" 
+                        name="correctAnswerTF" 
+                        defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : 'True'}
+                        style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
+                      >
+                        <option value="True">True</option>
+                        <option value="False">False</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedQType === 'FILL_BLANK' && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <Input
+                        label="Correct Answer Text"
+                        id="correctAnswerBlank"
+                        name="correctAnswerBlank"
+                        defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                        required
+                        placeholder="Provide the exact term or text to match"
+                      />
+                    </div>
+                  )}
+
+                  {selectedQType === 'DESCRIPTIVE' && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <Textarea
+                        label="Model Answer / Standard Key Points"
+                        id="correctAnswerDesc"
+                        name="correctAnswerDesc"
+                        defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
+                        required
+                        rows="3"
+                        placeholder="Standard answer guide text..."
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', marginBottom: '16px' }}>
+                    <Select
+                      label="Difficulty"
+                      id="difficultyLevel"
+                      name="difficultyLevel"
+                      defaultValue={questionModal.mode === 'edit' ? questionModal.data.difficultyLevel : 'MEDIUM'}
+                      options={[
+                        { value: 'EASY', label: 'Easy' },
+                        { value: 'MEDIUM', label: 'Medium' },
+                        { value: 'HARD', label: 'Hard' }
+                      ]}
+                    />
+                  </div>
+
                   <Input
-                    label="Correct Answer Text"
-                    id="correctAnswer"
-                    name="correctAnswer"
-                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
-                    required
-                    placeholder="Must match Option A, B, C, or D exactly"
+                    label="Tags (Comma-separated, optional)"
+                    id="tags"
+                    name="tags"
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.tags : ''}
+                    placeholder="e.g. basics, formula, percentage"
+                  />
+
+                  <Textarea
+                    label="Explanation (Optional)"
+                    id="explanation"
+                    name="explanation"
+                    rows="2"
+                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.explanation : ''}
+                    placeholder="Step-by-step solution details..."
                   />
                 </>
               )}
-
-              {selectedQType === 'TF' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <label htmlFor="correctAnswerTF">Correct Answer</label>
-                  <select 
-                    id="correctAnswerTF" 
-                    name="correctAnswerTF" 
-                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : 'True'}
-                    style={{ height: '46px', backgroundColor: '#0a0908', border: '1px solid rgba(255,255,255,0.08)' }}
-                  >
-                    <option value="True">True</option>
-                    <option value="False">False</option>
-                  </select>
-                </div>
-              )}
-
-              {selectedQType === 'FILL_BLANK' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <Input
-                    label="Correct Answer Text"
-                    id="correctAnswerBlank"
-                    name="correctAnswerBlank"
-                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
-                    required
-                    placeholder="Provide the exact term or text to match"
-                  />
-                </div>
-              )}
-
-              {selectedQType === 'DESCRIPTIVE' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <Textarea
-                    label="Model Answer / Standard Key Points"
-                    id="correctAnswerDesc"
-                    name="correctAnswerDesc"
-                    defaultValue={questionModal.mode === 'edit' ? questionModal.data.correctAnswer : ''}
-                    required
-                    rows="3"
-                    placeholder="Standard answer guide text..."
-                  />
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', marginBottom: '16px' }}>
-                <Select
-                  label="Difficulty"
-                  id="difficultyLevel"
-                  name="difficultyLevel"
-                  defaultValue={questionModal.mode === 'edit' ? questionModal.data.difficultyLevel : 'MEDIUM'}
-                  options={[
-                    { value: 'EASY', label: 'Easy' },
-                    { value: 'MEDIUM', label: 'Medium' },
-                    { value: 'HARD', label: 'Hard' }
-                  ]}
-                />
-              </div>
-
-              <Input
-                label="Tags (Comma-separated, optional)"
-                id="tags"
-                name="tags"
-                defaultValue={questionModal.mode === 'edit' ? questionModal.data.tags : ''}
-                placeholder="e.g. basics, formula, percentage"
-              />
-
-              <Textarea
-                label="Explanation (Optional)"
-                id="explanation"
-                name="explanation"
-                rows="2"
-                defaultValue={questionModal.mode === 'edit' ? questionModal.data.explanation : ''}
-                placeholder="Step-by-step solution details..."
-              />
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
                 <Button variant="secondary" onClick={() => setQuestionModal({ open: false, mode: 'create', moduleId: null, data: null })}>Cancel</Button>
