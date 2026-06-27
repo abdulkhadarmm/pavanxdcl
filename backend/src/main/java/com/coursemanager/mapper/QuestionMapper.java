@@ -32,11 +32,10 @@ public class QuestionMapper {
         }
         Question question = new Question();
         question.setQuestionText(request.getQuestionText());
-        question.setOptions(new ArrayList<>(request.getOptions()));
-        question.setCorrectAnswer(request.getCorrectAnswer());
-        question.setExplanation(request.getExplanation());
-        question.setDifficultyLevel(request.getDifficultyLevel() == null ? "MEDIUM" : request.getDifficultyLevel());
-        question.setTags(request.getTags());
+        question.setOptions(new ArrayList<>());
+        question.setCorrectAnswer("");
+        question.setDifficultyLevel("MEDIUM");
+        question.setTags("type_descriptive");
         return question;
     }
 
@@ -45,15 +44,5 @@ public class QuestionMapper {
             return;
         }
         question.setQuestionText(request.getQuestionText());
-        question.getOptions().clear();
-        if (request.getOptions() != null) {
-            question.getOptions().addAll(request.getOptions());
-        }
-        question.setCorrectAnswer(request.getCorrectAnswer());
-        question.setExplanation(request.getExplanation());
-        if (request.getDifficultyLevel() != null) {
-            question.setDifficultyLevel(request.getDifficultyLevel());
-        }
-        question.setTags(request.getTags());
     }
 }

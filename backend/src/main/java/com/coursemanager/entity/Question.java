@@ -25,7 +25,7 @@ public class Question {
     @OrderColumn(name = "option_order")
     private List<String> options = new ArrayList<>();
 
-    @Column(name = "correct_answer", nullable = false)
+    @Column(name = "correct_answer", nullable = true)
     private String correctAnswer;
 
     @Column(columnDefinition = "TEXT")

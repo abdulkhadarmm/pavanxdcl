@@ -827,24 +827,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     );
   };
 
-  // Open Question Modal with selected question type detection
+  // Open Question Modal
   const openQuestionModal = (mode, moduleId, data = null) => {
-    if (activeCourse?.courseType === 'QUESTION_BANK') {
-      setSelectedQType('DESCRIPTIVE');
-    } else if (mode === 'edit' && data) {
-      const tagsStr = data.tags || '';
-      if (tagsStr.includes('type_tf')) {
-        setSelectedQType('TF');
-      } else if (tagsStr.includes('type_fill_blank')) {
-        setSelectedQType('FILL_BLANK');
-      } else if (tagsStr.includes('type_descriptive')) {
-        setSelectedQType('DESCRIPTIVE');
-      } else {
-        setSelectedQType('MCQ');
-      }
-    } else {
-      setSelectedQType('MCQ');
-    }
     setQuestionModal({ open: true, mode, moduleId, data });
   };
 
@@ -852,51 +836,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const handleSaveQuestion = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const isQuestionBank = activeCourse?.courseType === 'QUESTION_BANK';
-    
-    // Determine options based on selected question type
-    let finalOptions = [];
-    let finalCorrectAnswer = '';
-    let finalQType = isQuestionBank ? 'DESCRIPTIVE' : selectedQType;
-    
-    if (!isQuestionBank) {
-      if (selectedQType === 'MCQ') {
-        finalOptions = [
-          formData.get('optionA') || '',
-          formData.get('optionB') || '',
-          formData.get('optionC') || '',
-          formData.get('optionD') || ''
-        ];
-        finalCorrectAnswer = formData.get('correctAnswer') || '';
-      } else if (selectedQType === 'TF') {
-        finalOptions = ['True', 'False'];
-        finalCorrectAnswer = formData.get('correctAnswerTF') || 'True';
-      } else if (selectedQType === 'FILL_BLANK') {
-        finalOptions = [];
-        finalCorrectAnswer = formData.get('correctAnswerBlank') || '';
-      } else if (selectedQType === 'DESCRIPTIVE') {
-        finalOptions = [];
-        finalCorrectAnswer = formData.get('correctAnswerDesc') || '';
-      }
-    }
-
-    // Append type tag to user tags
-    const userTags = isQuestionBank ? '' : (formData.get('tags') || '');
-    const cleanUserTags = userTags.split(',')
-      .map(t => t.trim())
-      .filter(t => t && !t.startsWith('type_'))
-      .join(', ');
-    
-    const typeIndicator = `type_${finalQType.toLowerCase()}`;
-    const finalTags = cleanUserTags ? `${cleanUserTags}, ${typeIndicator}` : typeIndicator;
-
     const payload = {
-      questionText: formData.get('questionText'),
-      options: finalOptions,
-      correctAnswer: finalCorrectAnswer,
-      difficultyLevel: isQuestionBank ? 'MEDIUM' : (formData.get('difficultyLevel') || 'MEDIUM'),
-      tags: finalTags,
-      explanation: isQuestionBank ? '' : (formData.get('explanation') || '')
+      questionText: formData.get('questionText')
     };
     const moduleId = questionModal.moduleId;
 
