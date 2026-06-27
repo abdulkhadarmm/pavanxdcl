@@ -20,6 +20,31 @@ import theme from '../config/theme';
 
 export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedCourseId, onClearCourse }) {
   const { addToast } = useToast();
+
+  const formatRelativeTime = (dateTimeStr) => {
+    if (!dateTimeStr) return 'Just Now';
+    try {
+      const date = new Date(dateTimeStr);
+      const now = new Date();
+      const diffMs = now - date;
+      if (isNaN(diffMs) || diffMs < 0) return 'Just Now';
+      
+      const diffSecs = Math.floor(diffMs / 1000);
+      if (diffSecs < 60) return 'Just Now';
+      
+      const diffMins = Math.floor(diffSecs / 60);
+      if (diffMins < 60) return `${diffMins}m ago`;
+      
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'Yesterday';
+      return `${diffDays}d ago`;
+    } catch (_) {
+      return 'Just Now';
+    }
+  };
   
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -85,6 +110,61 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const [importanceType, setImportanceType] = useState('Medium');
   const [customImportanceVal, setCustomImportanceVal] = useState('');
   const [sessionFormErrors, setSessionFormErrors] = useState({});
+
+  // Inactivity Auto-Logout (10 minutes)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+    let timeoutId;
+
+    const performLogout = () => {
+      localStorage.removeItem('admin_authenticated');
+      localStorage.removeItem('admin_session_token');
+      setIsAuthenticated(false);
+      addToast('Session expired due to inactivity. Please log in again.', 'info');
+      onViewPublic();
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(performLogout, INACTIVITY_TIMEOUT);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [isAuthenticated, onViewPublic, addToast]);
+
+  // Background Session Health Check (every 30 seconds)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        await authService.getProfile();
+      } catch (err) {
+        localStorage.removeItem('admin_authenticated');
+        localStorage.removeItem('admin_session_token');
+        setIsAuthenticated(false);
+        addToast('Your session has been invalidated (possibly logged in from another device).', 'error');
+        onViewPublic();
+      }
+    }, 30 * 1000); // 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, onViewPublic, addToast]);
 
   useEffect(() => {
     if (sessionModal.open) {
@@ -162,8 +242,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       }
     }
     return {
-      companyName: 'Pavan X Dhee Coding Lab',
-      shortName: 'PavanXDCL',
+      companyName: 'PavanxDCL',
+      shortName: 'PavanxDCL',
       tagline: 'Empowering Learners with Premium Tech Education',
       description: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.',
       contact: {
@@ -179,7 +259,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         linkedin: 'https://linkedin.com/company/pavanxdcl'
       },
       seo: {
-        defaultTitle: 'Pavan X Dhee Coding Lab (PavanXDCL) | Premium Coding Academy',
+        defaultTitle: 'PavanxDCL',
         defaultDescription: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.'
       }
     };
@@ -325,7 +405,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 ...s,
                 moduleName: m.name,
                 courseName: c.name,
-                updatedAt: 'Just Now'
+                updatedAt: s.updatedAt || ''
               });
             });
           } else {
@@ -335,6 +415,13 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
           }
         }
       }
+
+      // Sort allSessions by updatedAt descending
+      allSessions.sort((a, b) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(0);
+        const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(0);
+        return dateB - dateA;
+      });
 
       setStats({
         courses: activeCoursesList.filter(c => !permanentlyDeletedIds.courses.includes(c.id)).length,
@@ -1453,7 +1540,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                       </div>
                       <span style={{ fontSize: '0.73rem', color: '#64748b', whiteSpace: 'nowrap', marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        {session.updatedAt}
+                        {formatRelativeTime(session.updatedAt)}
                       </span>
                     </div>
                   ))}
@@ -1830,10 +1917,44 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                     {(sessions[selectedModuleId] || []).map((session, sIdx) => {
                       const isSessOpen = expandedSessionId === session.id;
                       const importanceBadgeStyle = (() => {
-                        const lvl = (session.importanceLevel || 'MEDIUM').toUpperCase();
-                        if (lvl === 'HIGH' || lvl === 'IMPORTANT') return { bg: 'rgba(168,85,247,0.15)', color: '#a855f7', text: 'IMPORTANT' };
-                        if (lvl === 'LOW' || lvl === 'EASY') return { bg: 'rgba(34,197,94,0.12)', color: '#22c55e', text: 'EASY' };
-                        return { bg: 'rgba(249,115,22,0.12)', color: 'var(--accent-orange)', text: 'MEDIUM' };
+                        const lvl = session.importanceLevel || 'Medium';
+                        const lvlLower = lvl.toLowerCase();
+                        
+                        let color = '#3b82f6'; // Blue
+                        let bg = 'rgba(59, 130, 246, 0.12)';
+                        
+                        if (lvlLower.includes('core') || lvlLower.includes('interview') || lvlLower.includes('must') || lvlLower.includes('hard') || lvlLower.includes('high')) {
+                          color = '#ef4444'; // Red-ish
+                          bg = 'rgba(239, 68, 68, 0.12)';
+                          if (lvlLower.includes('interview')) {
+                            color = '#f97316'; // Orange
+                            bg = 'rgba(249, 115, 22, 0.12)';
+                          }
+                          if (lvlLower.includes('must')) {
+                            color = '#ec4899'; // Pink
+                            bg = 'rgba(236, 72, 153, 0.12)';
+                          }
+                          if (lvlLower.includes('core')) {
+                            color = '#a855f7'; // Purple
+                            bg = 'rgba(168, 85, 247, 0.15)';
+                          }
+                        } else if (lvlLower.includes('easy') || lvlLower.includes('low') || lvlLower.includes('optional') || lvlLower.includes('revision') || lvlLower.includes('very easy')) {
+                          color = '#10b981'; // Green-ish
+                          bg = 'rgba(16, 185, 129, 0.12)';
+                          if (lvlLower.includes('optional')) {
+                            color = '#94a3b8'; // Slate/Grey
+                            bg = 'rgba(148, 163, 184, 0.12)';
+                          }
+                          if (lvlLower.includes('revision')) {
+                            color = '#06b6d4'; // Cyan
+                            bg = 'rgba(6, 182, 212, 0.12)';
+                          }
+                        } else {
+                          color = '#eab308'; // Yellow/Gold for Medium/Basics/etc
+                          bg = 'rgba(234, 179, 8, 0.12)';
+                        }
+                        
+                        return { bg, color, text: lvl };
                       })();
 
                       return (

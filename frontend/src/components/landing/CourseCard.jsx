@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
+import moduleService from '../../services/moduleService';
+import sessionService from '../../services/sessionService';
+import questionService from '../../services/questionService';
 import theme from '../../config/theme';
 
 export function CourseCard({
@@ -12,17 +14,17 @@ export function CourseCard({
     let active = true;
     const fetchCounts = async () => {
       try {
-        const modulesData = await api.getModules(course.id);
+        const modulesData = await moduleService.getModules(course.id);
         if (!active) return;
         
         let total = 0;
         if (course.courseType === 'LEARNING') {
-          const promises = modulesData.map(m => api.getSessions(m.id).catch(() => []));
+          const promises = modulesData.map(m => sessionService.getSessions(m.id).catch(() => []));
           const allSessions = await Promise.all(promises);
           if (!active) return;
           total = allSessions.reduce((acc, sess) => acc + (sess ? sess.length : 0), 0);
         } else {
-          const promises = modulesData.map(m => api.getQuestions(m.id).catch(() => []));
+          const promises = modulesData.map(m => questionService.getQuestions(m.id).catch(() => []));
           const allQuestions = await Promise.all(promises);
           if (!active) return;
           total = allQuestions.reduce((acc, q) => acc + (q ? q.length : 0), 0);

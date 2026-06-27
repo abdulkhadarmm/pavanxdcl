@@ -10,14 +10,6 @@ function App() {
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [courses, setCourses] = useState([]);
 
-  const getSlug = (name) => {
-    if (!name) return '';
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '');
-  };
-
   useEffect(() => {
     const initAndRegisterRoute = async () => {
       let fetchedCourses = [];
@@ -44,7 +36,7 @@ function App() {
           
           const slug = path.replace(/^\/+|\/+$/g, '');
           if (slug) {
-            const matched = fetchedCourses.find(c => getSlug(c.name) === slug);
+            const matched = fetchedCourses.find(c => c.slug === slug);
             if (matched) {
               setSelectedCourseId(matched.id);
               return;
@@ -88,10 +80,10 @@ function App() {
         console.error(e);
       }
     }
-    if (course) {
-      window.history.pushState({}, '', `/${getSlug(course.name)}`);
+    if (course && course.slug) {
+      window.history.pushState({}, '', `/${course.slug}`);
     } else {
-      window.history.pushState({}, '', `/course/${courseId}`);
+      window.history.pushState({}, '', '/');
     }
   };
 

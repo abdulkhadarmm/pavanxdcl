@@ -19,6 +19,7 @@ public class CourseMapper {
         response.setSecondaryColor(course.getSecondaryColor());
         response.setDisplayOrder(course.getDisplayOrder());
         response.setDeleted(course.isDeleted());
+        response.setSlug(generateSlug(course.getName()));
         return response;
     }
 
@@ -48,5 +49,13 @@ public class CourseMapper {
         if (request.getSecondaryColor() != null) {
             course.setSecondaryColor(request.getSecondaryColor());
         }
+    }
+
+    private static String generateSlug(String name) {
+        if (name == null) return "";
+        return name.toLowerCase()
+                .replaceAll("[^a-z0-9\\s]", "")
+                .replaceAll("\\s+", "-")
+                .replaceAll("^-|-$", "");
     }
 }

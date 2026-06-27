@@ -29,6 +29,7 @@ public class SessionMapper {
         response.setImportanceLevel(session.getImportanceLevel());
         response.setDisplayOrder(session.getDisplayOrder());
         response.setDeleted(session.isDeleted());
+        response.setUpdatedAt(session.getUpdatedAt() != null ? session.getUpdatedAt().toString() : null);
 
         if (session.getResources() != null) {
             response.setResources(session.getResources().stream()

@@ -11,6 +11,7 @@ public class CourseResponse {
     private String secondaryColor;
     private int displayOrder;
     private boolean deleted;
+    private String slug;
 
     public Long getId() {
         return id;
@@ -74,5 +75,13 @@ public class CourseResponse {
 
     public void setDeleted(boolean deleted) {
         this.deleted = deleted;
+    }
+
+    public String getSlug() {
+        return slug;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
     }
 }

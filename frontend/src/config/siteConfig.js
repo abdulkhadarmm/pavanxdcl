@@ -1,6 +1,6 @@
 const defaultSiteConfig = {
-  companyName: 'Pavan X Dhee Coding Lab',
-  shortName: 'PavanXDCL',
+  companyName: 'PavanxDCL',
+  shortName: 'PavanxDCL',
   tagline: 'Empowering Learners with Premium Tech Education',
   description: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.',
 
@@ -26,7 +26,7 @@ const defaultSiteConfig = {
   },
 
   seo: {
-    defaultTitle: 'Pavan X Dhee Coding Lab (PavanXDCL) | Premium Coding Academy',
+    defaultTitle: 'PavanxDCL',
     defaultDescription: 'DSA Forge • LeetCode Arena • Aptitude Lab — everything you need to crack placements and dominate FAANG interviews with PavanxDCL mentorship.',
     defaultKeywords: 'dsa, coding academy, placement preparation, faang coding interviews, pavanxdcl',
     siteUrl: 'http://localhost:5173',
@@ -64,9 +64,15 @@ const getPersistedConfig = () => {
       return {
         ...defaultSiteConfig,
         ...parsed,
+        companyName: defaultSiteConfig.companyName,
+        shortName: defaultSiteConfig.shortName,
         contact: { ...defaultSiteConfig.contact, ...(parsed.contact || {}) },
         socials: defaultSiteConfig.socials, // Always enforce default social links
-        seo: { ...defaultSiteConfig.seo, ...(parsed.seo || {}) }
+        seo: { 
+          ...defaultSiteConfig.seo, 
+          ...(parsed.seo || {}),
+          defaultTitle: defaultSiteConfig.seo.defaultTitle
+        }
       };
     }
   } catch (e) {

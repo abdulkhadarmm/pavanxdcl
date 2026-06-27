@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
+import courseService from '../../services/courseService';
 import CourseCard from './CourseCard';
 import Loader from '../ui/Loader';
 import ErrorMessage from '../ui/ErrorMessage';
@@ -16,7 +16,7 @@ export function CourseSection({
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getCourses();
+      const data = await courseService.getCourses();
       setCourses(data || []);
     } catch (err) {
       setError(err.message || 'Failed to fetch active courses. Please ensure the backend server is running.');

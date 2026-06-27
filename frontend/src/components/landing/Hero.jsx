@@ -61,7 +61,7 @@ export function Hero({
             }}
           >
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-orange)' }}></span>
-            Pavan X Dhee Coding Lab — Live & Active
+            PavanxDCL — Live & Active
           </span>
         </div>
 

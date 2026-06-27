@@ -33,6 +33,15 @@ public class Session {
     @Column(nullable = false)
     private boolean deleted = false;
 
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = java.time.LocalDateTime.now();
+    }
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Resource> resources = new ArrayList<>();
 
@@ -124,5 +133,11 @@ public class Session {
         this.practiceLinks = practiceLinks;
     }
 
+    public java.time.LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 
+    public void setUpdatedAt(java.time.LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

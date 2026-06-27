@@ -31,7 +31,7 @@ export function Footer() {
         {/* Left Side: Copyright text */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ lineHeight: '1.5', textAlign: 'left' }}>
-            © {currentYear} Pavan x Dhee Coding Lab · {siteConfig.shortName.toLowerCase()} | Designed by <a href="mailto:abdulkhadarmm12@gmail.com" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'var(--accent-orange)'} onMouseOut={(e) => e.currentTarget.style.color = 'inherit'}>Abdul Khadar M M</a>
+            © {currentYear} {siteConfig.shortName} | Designed by <a href="mailto:abdulkhadarmm12@gmail.com" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'var(--accent-orange)'} onMouseOut={(e) => e.currentTarget.style.color = 'inherit'}>Abdul Khadar M M</a>
           </span>
         </div>
 

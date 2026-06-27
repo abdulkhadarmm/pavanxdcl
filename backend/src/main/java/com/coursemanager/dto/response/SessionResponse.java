@@ -12,6 +12,7 @@ public class SessionResponse {
     private boolean deleted;
     private List<ResourceResponse> resources;
     private List<PracticeLinkResponse> practiceLinks;
+    private String updatedAt;
 
 
     public Long getId() {
@@ -86,5 +87,11 @@ public class SessionResponse {
         this.practiceLinks = practiceLinks;
     }
 
+    public String getUpdatedAt() {
+        return updatedAt;
+    }
 
+    public void setUpdatedAt(String updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }
