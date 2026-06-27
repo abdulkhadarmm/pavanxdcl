@@ -2056,8 +2056,12 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                             <div style={{ flexGrow: 1, marginRight: '20px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                                 <span style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-orange)', fontWeight: 600 }}>Q{qIdx + 1}</span>
-                                <Badge type={q.difficultyLevel || 'MEDIUM'}>{q.difficultyLevel}</Badge>
-                                {q.tags && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Tags: {q.tags}</span>}
+                                {activeCourse?.courseType !== 'QUESTION_BANK' && (
+                                  <>
+                                    <Badge type={q.difficultyLevel || 'MEDIUM'}>{q.difficultyLevel}</Badge>
+                                    {q.tags && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Tags: {q.tags}</span>}
+                                  </>
+                                )}
                               </div>
                               <p style={{ fontWeight: 600, color: '#fff', fontSize: '1.02rem', lineHeight: '1.4' }}>{q.questionText}</p>
                             </div>
