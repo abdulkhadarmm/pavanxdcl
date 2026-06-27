@@ -556,7 +556,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     const payload = {
       name: formData.get('name'),
       description: formData.get('description'),
-      courseType: formData.get('courseType'),
+      courseType: courseModal.mode === 'edit' ? courseModal.data.courseType : formData.get('courseType'),
       primaryColor: primaryColorHex,
       secondaryColor: secondaryColorHex
     };
