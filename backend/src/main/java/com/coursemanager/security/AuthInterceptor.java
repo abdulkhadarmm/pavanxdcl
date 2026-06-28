@@ -62,8 +62,8 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 2. GET requests are public, EXCEPT for profile/update and /deleted endpoints
-        if ("GET".equalsIgnoreCase(method)) {
+        // 2. GET and HEAD requests are public, EXCEPT for profile/update and /deleted endpoints
+        if ("GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method)) {
             if (path.contains("/deleted")) {
                 return false;
             }
