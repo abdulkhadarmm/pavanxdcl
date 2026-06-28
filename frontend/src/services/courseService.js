@@ -4,6 +4,8 @@ export const courseService = {
   getCourses: () => request('/courses'),
   getDeletedCourses: () => request('/courses/deleted'),
   getCourseById: (id) => request(`/courses/${id}`),
+  getCourseSyllabus: (id) => request(`/courses/${id}/syllabus`),
+  getDashboardStats: () => request('/courses/dashboard-stats'),
   createCourse: (data) => request('/courses', {
     method: 'POST',
     body: JSON.stringify(data)

@@ -13,6 +13,24 @@ public class SessionResponse {
     private List<ResourceResponse> resources;
     private List<PracticeLinkResponse> practiceLinks;
     private String updatedAt;
+    private String moduleName;
+    private String courseName;
+
+    public String getModuleName() {
+        return moduleName;
+    }
+
+    public void setModuleName(String moduleName) {
+        this.moduleName = moduleName;
+    }
+
+    public String getCourseName() {
+        return courseName;
+    }
+
+    public void setCourseName(String courseName) {
+        this.courseName = courseName;
+    }
 
 
     public Long getId() {

@@ -1,8 +1,7 @@
 package com.coursemanager.controller;
 
 import com.coursemanager.dto.request.CourseRequest;
-import com.coursemanager.dto.response.ApiResponse;
-import com.coursemanager.dto.response.CourseResponse;
+import com.coursemanager.dto.response.*;
 import com.coursemanager.service.CourseService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,6 +38,28 @@ public class CourseController {
                 HttpStatus.OK.value(),
                 "Soft-deleted courses fetched successfully",
                 courses
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/dashboard-stats")
+    public ResponseEntity<ApiResponse<DashboardStatsResponse>> getDashboardStats() {
+        DashboardStatsResponse stats = courseService.getDashboardStats();
+        ApiResponse<DashboardStatsResponse> response = new ApiResponse<>(
+                HttpStatus.OK.value(),
+                "Dashboard stats calculated successfully",
+                stats
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/syllabus")
+    public ResponseEntity<ApiResponse<CourseSyllabusResponse>> getCourseSyllabus(@PathVariable Long id) {
+        CourseSyllabusResponse syllabus = courseService.getCourseSyllabus(id);
+        ApiResponse<CourseSyllabusResponse> response = new ApiResponse<>(
+                HttpStatus.OK.value(),
+                "Course syllabus fetched successfully",
+                syllabus
         );
         return ResponseEntity.ok(response);
     }

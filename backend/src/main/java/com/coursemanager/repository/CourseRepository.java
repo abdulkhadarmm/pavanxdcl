@@ -16,4 +16,6 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @Query("SELECT COALESCE(MAX(c.displayOrder), 0) FROM Course c")
     int findMaxDisplayOrder();
+
+    long countByDeletedFalse();
 }

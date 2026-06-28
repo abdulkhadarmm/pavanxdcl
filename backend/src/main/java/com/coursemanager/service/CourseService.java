@@ -2,6 +2,8 @@ package com.coursemanager.service;
 
 import com.coursemanager.dto.request.CourseRequest;
 import com.coursemanager.dto.response.CourseResponse;
+import com.coursemanager.dto.response.CourseSyllabusResponse;
+import com.coursemanager.dto.response.DashboardStatsResponse;
 
 import java.util.List;
 
@@ -12,6 +14,10 @@ public interface CourseService {
     List<CourseResponse> getDeletedCourses();
 
     CourseResponse getCourseById(Long id);
+
+    CourseSyllabusResponse getCourseSyllabus(Long id);
+
+    DashboardStatsResponse getDashboardStats();
 
     CourseResponse createCourse(CourseRequest request);
 

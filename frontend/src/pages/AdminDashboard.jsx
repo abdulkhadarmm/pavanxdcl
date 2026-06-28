@@ -379,59 +379,17 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   };
 
   // Fetch Stats dynamically
-  const loadDashboardStats = async (activeCoursesList) => {
+  const loadDashboardStats = async () => {
     try {
-      let moduleCount = 0;
-      let sessionCount = 0;
-      let questionCount = 0;
-      let resourceCount = 0;
-      let allSessions = [];
-
-      const filteredCourses = activeCoursesList.filter(c => !permanentlyDeletedIds.courses.includes(c.id));
-
-      await Promise.all(filteredCourses.map(async (c) => {
-        const mods = await moduleService.getModules(c.id).catch(() => []);
-        const filteredMods = mods.filter(m => !permanentlyDeletedIds.modules.includes(m.id));
-        moduleCount += filteredMods.length;
-
-        await Promise.all(filteredMods.map(async (m) => {
-          if (c.courseType === 'LEARNING') {
-            const sess = await sessionService.getSessions(m.id).catch(() => []);
-            const filteredSess = sess.filter(s => !permanentlyDeletedIds.sessions.includes(s.id));
-            sessionCount += filteredSess.length;
-            
-            filteredSess.forEach(s => {
-              resourceCount += (s.resources ? s.resources.length : 0);
-              allSessions.push({
-                ...s,
-                moduleName: m.name,
-                courseName: c.name,
-                updatedAt: s.updatedAt || ''
-              });
-            });
-          } else {
-            const quests = await questionService.getQuestions(m.id).catch(() => []);
-            const filteredQuests = quests.filter(q => !permanentlyDeletedIds.questions.includes(q.id));
-            questionCount += filteredQuests.length;
-          }
-        }));
-      }));
-
-      // Sort allSessions by updatedAt descending
-      allSessions.sort((a, b) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(0);
-        const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(0);
-        return dateB - dateA;
-      });
-
+      const response = await courseService.getDashboardStats();
       setStats({
-        courses: activeCoursesList.filter(c => !permanentlyDeletedIds.courses.includes(c.id)).length,
-        modules: moduleCount,
-        sessions: sessionCount,
-        questions: questionCount,
-        resources: resourceCount
+        courses: response.courses,
+        modules: response.modules,
+        sessions: response.sessions,
+        questions: response.questions,
+        resources: response.resources
       });
-      setRecentSessions(allSessions.slice(0, 5));
+      setRecentSessions(response.recentSessions || []);
     } catch (err) {
       console.error('Error loading dashboard stats:', err);
     }
@@ -442,7 +400,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       const data = await courseService.getCourses();
       const active = (data || []).filter(c => !permanentlyDeletedIds.courses.includes(c.id));
       setCourses(active);
-      loadDashboardStats(active);
+      loadDashboardStats();
     } catch (err) {
       setError('Failed to fetch courses: ' + err.message);
     }

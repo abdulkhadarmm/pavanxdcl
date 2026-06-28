@@ -16,4 +16,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     @Query("SELECT COALESCE(MAX(q.displayOrder), 0) FROM Question q WHERE q.module.id = :moduleId")
     int findMaxDisplayOrderByModuleId(Long moduleId);
+
+    long countByDeletedFalse();
 }

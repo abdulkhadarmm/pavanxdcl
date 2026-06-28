@@ -16,4 +16,8 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     @Query("SELECT COALESCE(MAX(s.displayOrder), 0) FROM Session s WHERE s.module.id = :moduleId")
     int findMaxDisplayOrderByModuleId(Long moduleId);
+
+    List<Session> findTop5ByDeletedFalseOrderByUpdatedAtDesc();
+
+    long countByDeletedFalse();
 }

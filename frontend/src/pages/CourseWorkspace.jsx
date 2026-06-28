@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useSEO from '../hooks/useSEO';
 import courseService from '../services/courseService';
-import moduleService from '../services/moduleService';
-import sessionService from '../services/sessionService';
-import questionService from '../services/questionService';
 import Navbar from '../components/landing/Navbar';
 import Footer from '../components/landing/Footer';
 import Loader from '../components/ui/Loader';
@@ -42,35 +39,26 @@ export function CourseWorkspace({
     setLoading(true);
     setError(null);
     try {
-      const activeCourse = await courseService.getCourseById(courseId);
-      setCourse(activeCourse);
+      const syllabus = await courseService.getCourseSyllabus(courseId);
+      setCourse(syllabus);
       
-      const activeModules = await moduleService.getModules(courseId);
-      const filteredMods = (activeModules || []).filter(m => {
+      const filteredMods = (syllabus.modules || []).filter(m => {
         // filter out locally permanently deleted modules
         const permDeleted = JSON.parse(localStorage.getItem('perm_deleted_ids') || '{"modules":[]}');
         return !permDeleted.modules?.includes(m.id);
       });
       setModules(filteredMods);
       
-      // Load contents for all modules in parallel
       const contentMap = {};
-      await Promise.all(filteredMods.map(async (mod) => {
-        try {
-          if (activeCourse.courseType === 'LEARNING') {
-            const sessions = await sessionService.getSessions(mod.id);
-            const permDeleted = JSON.parse(localStorage.getItem('perm_deleted_ids') || '{"sessions":[]}');
-            contentMap[mod.id] = (sessions || []).filter(s => !permDeleted.sessions?.includes(s.id));
-          } else {
-            const questions = await questionService.getQuestions(mod.id);
-            const permDeleted = JSON.parse(localStorage.getItem('perm_deleted_ids') || '{"questions":[]}');
-            contentMap[mod.id] = (questions || []).filter(q => !permDeleted.questions?.includes(q.id));
-          }
-        } catch (err) {
-          console.error(`Failed to fetch content for module ${mod.id}`, err);
-          contentMap[mod.id] = [];
+      for (const mod of filteredMods) {
+        if (syllabus.courseType === 'LEARNING') {
+          const permDeleted = JSON.parse(localStorage.getItem('perm_deleted_ids') || '{"sessions":[]}');
+          contentMap[mod.id] = (mod.sessions || []).filter(s => !permDeleted.sessions?.includes(s.id));
+        } else {
+          const permDeleted = JSON.parse(localStorage.getItem('perm_deleted_ids') || '{"questions":[]}');
+          contentMap[mod.id] = (mod.questions || []).filter(q => !permDeleted.questions?.includes(q.id));
         }
-      }));
+      }
       setModuleContent(contentMap);
     } catch (err) {
       setError(err.message || 'Failed to fetch course data.');
