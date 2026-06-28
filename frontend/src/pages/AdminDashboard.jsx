@@ -57,6 +57,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
 
   // Tabs State
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'courses' | 'modules' | 'sessions' | 'trash' | 'settings'
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Data States
   const [courses, setCourses] = useState([]);
@@ -283,6 +285,15 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   useEffect(() => {
     localStorage.setItem('perm_deleted_ids', JSON.stringify(permanentlyDeletedIds));
   }, [permanentlyDeletedIds]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load Data
   useEffect(() => {
@@ -1139,6 +1150,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setError(null);
+    setMobileSidebarOpen(false);
   };
 
   // Render Admin Dashboard
@@ -1172,7 +1184,6 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       {/* Left Sidebar */}
       <div 
         style={{
-          zIndex: 10,
           width: '260px',
           backgroundColor: '#121111',
           borderRight: '1px solid rgba(255, 255, 255, 0.05)',
@@ -1182,7 +1193,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
           position: 'fixed',
           height: '100vh',
           top: 0,
-          left: 0,
+          left: isMobile ? (mobileSidebarOpen ? '0' : '-260px') : '0',
+          transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 100
         }}
       >
@@ -1315,14 +1327,90 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         </div>
       </div>
 
+      {/* Mobile Backdrop Overlay */}
+      {isMobile && mobileSidebarOpen && (
+        <div 
+          onClick={() => setMobileSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 95
+          }}
+        />
+      )}
+
+      {/* Mobile Top Header */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '64px',
+          backgroundColor: '#121111',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 20px',
+          zIndex: 90
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px'
+              }}
+            >
+              <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.05em', margin: 0 }}>
+              <span style={{ color: '#fff' }}>PAVAN</span>
+              <span style={{ color: 'var(--accent-orange)' }}>XDCL</span>
+            </h2>
+          </div>
+          <span 
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: 'var(--accent-orange)',
+              background: 'rgba(249, 115, 22, 0.08)',
+              border: '1px solid rgba(249, 115, 22, 0.15)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              textTransform: 'uppercase'
+            }}
+          >
+            Admin
+          </span>
+        </div>
+      )}
+
       {/* Main Panel Content Container */}
       <main 
         style={{
           position: 'relative',
           zIndex: 1,
-          marginLeft: '260px',
+          marginLeft: isMobile ? '0' : '260px',
           flexGrow: 1,
-          padding: '40px 50px',
+          padding: isMobile ? '24px 16px' : '40px 50px',
+          paddingTop: isMobile ? '88px' : '40px',
           minHeight: '100vh',
           backgroundColor: 'transparent'
         }}
@@ -1393,7 +1481,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
             </div>
 
             {/* Recently Updated and Quick Guides Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '24px', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.8fr 1fr', gap: '24px', alignItems: 'start' }}>
               
               {/* Recently Updated Sessions */}
               <div 
@@ -1491,7 +1579,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         {/* ==================== 2. COURSES TAB ==================== */}
         {activeTab === 'courses' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', gap: isMobile ? '16px' : '0', marginBottom: '36px' }}>
               <div>
                 <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Courses</h1>
                 <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Create, edit, delete, and reorder courses using drag-and-drop.</p>
@@ -1606,7 +1694,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         {/* ==================== 3. MODULES TAB ==================== */}
         {activeTab === 'modules' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', gap: isMobile ? '16px' : '0', marginBottom: '36px' }}>
               <div>
                 <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Modules</h1>
                 <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Organize courses into modular segments and reorder them.</p>
@@ -1629,9 +1717,9 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
             {/* Course Selector Panel */}
             <div style={{ backgroundColor: '#121111', borderRadius: '10px', padding: '20px 24px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px' }}>CURRENT COURSE SELECTION</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: '12px' }}>
                 <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: 0 }}>Select a course to load and organize its respective modules.</p>
-                <div style={{ position: 'relative', minWidth: '220px' }}>
+                <div style={{ position: 'relative', minWidth: isMobile ? '100%' : '220px' }}>
                   <select 
                     id="course-select-dropdown"
                     value={activeCourse ? activeCourse.id : ''} 
@@ -1745,7 +1833,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         {/* ==================== 4. SESSIONS TAB ==================== */}
         {activeTab === 'sessions' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', gap: isMobile ? '16px' : '0', marginBottom: '36px' }}>
               <div>
                 <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Manage Sessions</h1>
                 <p style={{ color: '#64748b', marginTop: '6px', fontSize: '0.9rem' }}>Build sessions, add YouTube recordings, Google Drive notes, and solve LeetCode sheets.</p>
@@ -1757,7 +1845,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                     display: 'flex', alignItems: 'center', gap: '6px',
                     background: 'var(--accent-orange)', color: '#fff',
                     border: 'none', borderRadius: '8px', padding: '10px 18px',
-                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                    alignSelf: isMobile ? 'flex-start' : 'auto'
                   }}
                 >
                   + Add Session
@@ -1767,7 +1856,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
 
             {/* Selectors Panel */}
             <div style={{ backgroundColor: '#121111', borderRadius: '10px', padding: '20px 24px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
                 <div>
                   <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>COURSE SELECTION</div>
                   <div style={{ position: 'relative' }}>
@@ -2230,7 +2319,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                   <p style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '18px' }}>
                     Changing your admin email or password requires entering a new password.
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
                     <div>
                       <label htmlFor="settings-username">Admin Username / Email</label>
                       <Input key={adminEmail} id="settings-username" name="username" defaultValue={adminEmail} required placeholder="Email Address" />
@@ -2246,16 +2335,16 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
               {/* ─── 3. Platform Branding ─── */}
               <form onSubmit={handleSaveBranding}>
                 <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
                       🎨 Platform Branding
                     </h3>
-                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
                       Save Branding
                     </Button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
                       <div>
                         <label htmlFor="settings-companyName">Company Name</label>
                         <Input id="settings-companyName" name="companyName" defaultValue={settings.companyName} required />
@@ -2280,11 +2369,11 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
               {/* ─── 4. SEO Default Information ─── */}
               <form onSubmit={handleSaveSEO}>
                 <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
                       🔍 SEO Default Information
                     </h3>
-                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
                       Save SEO
                     </Button>
                   </div>
@@ -2304,16 +2393,16 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
               {/* ─── 5. Contact Information ─── */}
               <form onSubmit={handleSaveContact}>
                 <div className="glass-container" style={{ backgroundColor: '#121111', borderRadius: '16px', padding: '30px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '16px' : '0', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '10px' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-orange)', margin: 0 }}>
                       📞 Contact Information & Location
                     </h3>
-                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem' }}>
+                    <Button type="submit" style={{ padding: '8px 22px', fontSize: '0.85rem', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
                       Save Contact
                     </Button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
                       <div>
                         <label htmlFor="settings-email">Support Email Address</label>
                         <Input id="settings-email" name="email" type="email" defaultValue={settings.contact?.email} required />
