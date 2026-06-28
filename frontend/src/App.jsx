@@ -11,58 +11,60 @@ function App() {
   const [courses, setCourses] = useState([]);
 
   useEffect(() => {
-    const initAndRegisterRoute = async () => {
-      let fetchedCourses = [];
+    let fetchedCourses = [];
+
+    const handleRouteChange = (coursesList = fetchedCourses) => {
+      const path = window.location.pathname;
+      const isPathAdmin = path === '/admin' || path === '/admin/';
+      const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
+      
+      if (isPathAdmin || isHashAdmin) {
+        setView('admin');
+      } else {
+        setView('public');
+        
+        if (window.location.hash === '#hero') {
+          window.history.replaceState(null, '', path);
+        }
+        
+        const slug = path.replace(/^\/+|\/+$/g, '');
+        if (slug) {
+          const matched = coursesList.find(c => c.slug === slug);
+          if (matched) {
+            setSelectedCourseId(matched.id);
+            return;
+          }
+        }
+        setSelectedCourseId(null);
+      }
+    };
+
+    // Run route check immediately on mount so view is set to admin right away!
+    handleRouteChange();
+
+    const loadCourses = async () => {
       try {
-        fetchedCourses = await courseService.getCourses();
-        setCourses(fetchedCourses || []);
+        const fetched = await courseService.getCourses();
+        fetchedCourses = fetched || [];
+        setCourses(fetchedCourses);
+        // Rerun route change check with the newly loaded courses list to resolve potential slug match
+        handleRouteChange(fetchedCourses);
       } catch (err) {
         console.error("Failed to load courses on mount:", err);
       }
-
-      const handleRouteChange = () => {
-        const path = window.location.pathname;
-        const isPathAdmin = path === '/admin' || path === '/admin/';
-        const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
-        
-        if (isPathAdmin || isHashAdmin) {
-          setView('admin');
-        } else {
-          setView('public');
-          
-          if (window.location.hash === '#hero') {
-            window.history.replaceState(null, '', path);
-          }
-          
-          const slug = path.replace(/^\/+|\/+$/g, '');
-          if (slug) {
-            const matched = fetchedCourses.find(c => c.slug === slug);
-            if (matched) {
-              setSelectedCourseId(matched.id);
-              return;
-            }
-          }
-          setSelectedCourseId(null);
-        }
-      };
-
-      window.addEventListener('hashchange', handleRouteChange);
-      window.addEventListener('popstate', handleRouteChange);
-      handleRouteChange(); // run on load
-      
-      return () => {
-        window.removeEventListener('hashchange', handleRouteChange);
-        window.removeEventListener('popstate', handleRouteChange);
-      };
     };
 
-    let cleanupFn;
-    initAndRegisterRoute().then(cleanup => {
-      cleanupFn = cleanup;
-    });
+    loadCourses();
 
+    const onHashChange = () => handleRouteChange();
+    const onPopState = () => handleRouteChange();
+
+    window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onPopState);
+    
     return () => {
-      if (cleanupFn) cleanupFn();
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onPopState);
     };
   }, []);
 
