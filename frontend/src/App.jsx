@@ -5,13 +5,15 @@ import CourseWorkspace from './pages/CourseWorkspace';
 import AdminDashboard from './pages/AdminDashboard';
 import courseService from './services/courseService';
 
+const checkIsAdminPath = () => {
+  const path = window.location.pathname;
+  const isPathAdmin = path === '/admin' || path === '/admin/';
+  const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
+  return isPathAdmin || isHashAdmin;
+};
+
 function App() {
-  const [view, setView] = useState(() => {
-    const path = window.location.pathname;
-    const isPathAdmin = path === '/admin' || path === '/admin/';
-    const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
-    return (isPathAdmin || isHashAdmin) ? 'admin' : 'public';
-  });
+  const [view, setView] = useState(() => checkIsAdminPath() ? 'admin' : 'public');
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [courses, setCourses] = useState([]);
 
@@ -20,10 +22,7 @@ function App() {
 
     const handleRouteChange = (coursesList = fetchedCourses) => {
       const path = window.location.pathname;
-      const isPathAdmin = path === '/admin' || path === '/admin/';
-      const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
-      
-      if (isPathAdmin || isHashAdmin) {
+      if (checkIsAdminPath()) {
         setView('admin');
       } else {
         setView('public');
@@ -59,10 +58,7 @@ function App() {
       }
     };
 
-    const path = window.location.pathname;
-    const isPathAdmin = path === '/admin' || path === '/admin/';
-    const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
-    if (!isPathAdmin && !isHashAdmin) {
+    if (!checkIsAdminPath()) {
       loadCourses();
     }
 
