@@ -1590,7 +1590,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                   display: 'flex', alignItems: 'center', gap: '6px',
                   background: 'var(--accent-orange)', color: '#fff',
                   border: 'none', borderRadius: '8px', padding: '10px 18px',
-                  fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                  fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                  alignSelf: 'flex-start'
                 }}
               >
                 + Add Course
@@ -1706,7 +1707,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                     display: 'flex', alignItems: 'center', gap: '6px',
                     background: 'var(--accent-orange)', color: '#fff',
                     border: 'none', borderRadius: '8px', padding: '10px 18px',
-                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer'
+                    fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
+                    alignSelf: 'flex-start'
                   }}
                 >
                   + Add Module
@@ -1846,7 +1848,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                     background: 'var(--accent-orange)', color: '#fff',
                     border: 'none', borderRadius: '8px', padding: '10px 18px',
                     fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer',
-                    alignSelf: isMobile ? 'flex-start' : 'auto'
+                    alignSelf: 'flex-start'
                   }}
                 >
                   + Add Session
@@ -2088,9 +2090,9 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
                 {/* 4B. QUESTION BANK COURSE VIEW: QUESTIONS LIST */}
                 {activeCourse.courseType === 'QUESTION_BANK' && (
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Active Questions ({(questions[selectedModuleId] || []).length})</h3>
-                      <button onClick={() => openQuestionModal('create', selectedModuleId)} style={{ background: 'var(--accent-orange)', border: 'none', color: '#fff', borderRadius: '8px', padding: '8px 16px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer' }}>+ Add Question</button>
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '12px' : '0', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Active Questions ({(questions[selectedModuleId] || []).length})</h3>
+                      <button onClick={() => openQuestionModal('create', selectedModuleId)} style={{ background: 'var(--accent-orange)', border: 'none', color: '#fff', borderRadius: '8px', padding: '8px 16px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}>+ Add Question</button>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
