@@ -7,7 +7,7 @@ import courseService from './services/courseService';
 
 const checkIsAdminPath = () => {
   const path = window.location.pathname;
-  const isPathAdmin = path === '/admin' || path === '/admin/';
+  const isPathAdmin = path === '/admin' || path === '/admin/' || path.startsWith('/admin/');
   const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
   return isPathAdmin || isHashAdmin;
 };
@@ -88,16 +88,20 @@ function App() {
         console.error(e);
       }
     }
-    if (course && course.slug) {
-      window.history.pushState({}, '', `/${course.slug}`);
-    } else {
-      window.history.pushState({}, '', '/');
+    if (view === 'public') {
+      if (course && course.slug) {
+        window.history.pushState({}, '', `/${course.slug}`);
+      } else {
+        window.history.pushState({}, '', '/');
+      }
     }
   };
 
   const handleClearCourse = () => {
     setSelectedCourseId(null);
-    window.history.pushState({}, '', '/');
+    if (view === 'public') {
+      window.history.pushState({}, '', '/');
+    }
   };
 
   return (

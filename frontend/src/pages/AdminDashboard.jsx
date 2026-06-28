@@ -8,7 +8,6 @@ import { useToast } from '../context/ToastContext';
 
 // Atomic UI components
 import Button from '../components/ui/Button';
-import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Loader from '../components/ui/Loader';
 import ErrorMessage from '../components/ui/ErrorMessage';
@@ -56,7 +55,15 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
   const [showPassword, setShowPassword] = useState(false);
 
   // Tabs State
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'courses' | 'modules' | 'sessions' | 'trash' | 'settings'
+  const [activeTab, setActiveTab] = useState(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/admin/courses')) return 'courses';
+    if (path.startsWith('/admin/modules')) return 'modules';
+    if (path.startsWith('/admin/sessions')) return 'sessions';
+    if (path.startsWith('/admin/trash')) return 'trash';
+    if (path.startsWith('/admin/settings')) return 'settings';
+    return 'dashboard';
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -293,6 +300,20 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/admin/courses')) setActiveTab('courses');
+      else if (path.startsWith('/admin/modules')) setActiveTab('modules');
+      else if (path.startsWith('/admin/sessions')) setActiveTab('sessions');
+      else if (path.startsWith('/admin/trash')) setActiveTab('trash');
+      else if (path.startsWith('/admin/settings')) setActiveTab('settings');
+      else if (path.startsWith('/admin')) setActiveTab('dashboard');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Load Data
@@ -1151,6 +1172,13 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
     setActiveTab(tab);
     setError(null);
     setMobileSidebarOpen(false);
+    
+    // Update URL to match admin section path
+    if (tab === 'dashboard') {
+      window.history.pushState({}, '', '/admin');
+    } else {
+      window.history.pushState({}, '', `/admin/${tab}`);
+    }
   };
 
   // Render Admin Dashboard
