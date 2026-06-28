@@ -133,7 +133,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       timeoutId = setTimeout(performLogout, INACTIVITY_TIMEOUT);
     };
 
-    const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+    const activityEvents = ['click', 'keypress'];
 
     activityEvents.forEach((event) => {
       window.addEventListener(event, resetTimer);
