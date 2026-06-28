@@ -290,7 +290,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       fetchCourses();
       fetchDeletedCourses();
     }
-  }, [isAuthenticated, permanentlyDeletedIds]);
+  }, [isAuthenticated]);
 
   // Load Profile from backend on authentication
   useEffect(() => {

@@ -6,7 +6,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import courseService from './services/courseService';
 
 function App() {
-  const [view, setView] = useState('public'); // 'public' | 'admin'
+  const [view, setView] = useState(() => {
+    const path = window.location.pathname;
+    const isPathAdmin = path === '/admin' || path === '/admin/';
+    const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
+    return (isPathAdmin || isHashAdmin) ? 'admin' : 'public';
+  });
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [courses, setCourses] = useState([]);
 
@@ -54,7 +59,12 @@ function App() {
       }
     };
 
-    loadCourses();
+    const path = window.location.pathname;
+    const isPathAdmin = path === '/admin' || path === '/admin/';
+    const isHashAdmin = window.location.hash === '#admin' || window.location.hash === '#/admin';
+    if (!isPathAdmin && !isHashAdmin) {
+      loadCourses();
+    }
 
     const onHashChange = () => handleRouteChange();
     const onPopState = () => handleRouteChange();
