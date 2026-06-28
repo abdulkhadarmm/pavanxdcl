@@ -322,7 +322,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       }
       const sessTrash = {};
       const questTrash = {};
-      for (const m of modules) {
+      await Promise.all(modules.map(async (m) => {
         try {
           if (activeCourse.courseType === 'LEARNING') {
             const delSess = await sessionService.getDeletedSessions(m.id);
@@ -334,7 +334,7 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
         } catch (err) {
           console.error(`Error loading trash for module ${m.id}:`, err);
         }
-      }
+      }));
       setDeletedSessions(sessTrash);
       setDeletedQuestions(questTrash);
     };
@@ -387,13 +387,14 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
       let resourceCount = 0;
       let allSessions = [];
 
-      for (const c of activeCoursesList) {
-        if (permanentlyDeletedIds.courses.includes(c.id)) continue;
+      const filteredCourses = activeCoursesList.filter(c => !permanentlyDeletedIds.courses.includes(c.id));
+
+      await Promise.all(filteredCourses.map(async (c) => {
         const mods = await moduleService.getModules(c.id).catch(() => []);
         const filteredMods = mods.filter(m => !permanentlyDeletedIds.modules.includes(m.id));
         moduleCount += filteredMods.length;
 
-        for (const m of filteredMods) {
+        await Promise.all(filteredMods.map(async (m) => {
           if (c.courseType === 'LEARNING') {
             const sess = await sessionService.getSessions(m.id).catch(() => []);
             const filteredSess = sess.filter(s => !permanentlyDeletedIds.sessions.includes(s.id));
@@ -413,8 +414,8 @@ export default function AdminDashboard({ onViewPublic, onSelectCourse, selectedC
             const filteredQuests = quests.filter(q => !permanentlyDeletedIds.questions.includes(q.id));
             questionCount += filteredQuests.length;
           }
-        }
-      }
+        }));
+      }));
 
       // Sort allSessions by updatedAt descending
       allSessions.sort((a, b) => {

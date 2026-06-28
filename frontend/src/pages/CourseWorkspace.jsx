@@ -53,9 +53,9 @@ export function CourseWorkspace({
       });
       setModules(filteredMods);
       
-      // Load contents for all modules
+      // Load contents for all modules in parallel
       const contentMap = {};
-      for (const mod of filteredMods) {
+      await Promise.all(filteredMods.map(async (mod) => {
         try {
           if (activeCourse.courseType === 'LEARNING') {
             const sessions = await sessionService.getSessions(mod.id);
@@ -70,7 +70,7 @@ export function CourseWorkspace({
           console.error(`Failed to fetch content for module ${mod.id}`, err);
           contentMap[mod.id] = [];
         }
-      }
+      }));
       setModuleContent(contentMap);
     } catch (err) {
       setError(err.message || 'Failed to fetch course data.');
