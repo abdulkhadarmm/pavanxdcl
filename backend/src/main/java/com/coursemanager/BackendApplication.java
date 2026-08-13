@@ -5,6 +5,7 @@ import com.coursemanager.entity.Session;
 import com.coursemanager.repository.AdminRepository;
 import com.coursemanager.repository.SessionRepository;
 import com.coursemanager.util.PasswordHasher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -26,14 +27,18 @@ public class BackendApplication extends SpringBootServletInitializer {
 	}
 
 	@Bean
-	public CommandLineRunner initAdminUser(AdminRepository adminRepository, SessionRepository sessionRepository) {
+	public CommandLineRunner initAdminUser(
+			AdminRepository adminRepository,
+			SessionRepository sessionRepository,
+			@Value("${ADMIN_EMAIL}") String adminEmail,
+			@Value("${ADMIN_PASSWORD}") String adminPassword
+	) {
 		return args -> {
 			if (adminRepository.count() == 0) {
-				String defaultEmail = "admin@gmail.com";
-				String defaultPass = PasswordHasher.hash("admin@123");
-				Admin defaultAdmin = new Admin(defaultEmail, defaultPass);
+				String hashedPass = PasswordHasher.hash(adminPassword);
+				Admin defaultAdmin = new Admin(adminEmail, hashedPass);
 				adminRepository.save(defaultAdmin);
-				System.out.println("Default Admin user seeded: admin@gmail.com / admin@123");
+				System.out.println("Default Admin user seeded: " + adminEmail);
 			}
 
 			// Initialize null updatedAt fields for existing database rows
@@ -41,7 +46,7 @@ public class BackendApplication extends SpringBootServletInitializer {
 			boolean updatedAny = false;
 			for (Session s : sessions) {
 				if (s.getUpdatedAt() == null) {
-					s.setUpdatedAt(java.time.LocalDateTime.now().minusHours(1)); // set to 1 hour ago
+					s.setUpdatedAt(java.time.LocalDateTime.now().minusHours(1));
 					sessionRepository.save(s);
 					updatedAny = true;
 				}
