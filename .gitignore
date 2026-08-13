@@ -31,3 +31,6 @@ Desktop.ini
 # Temp / Zip
 *.zip
 *.tar.gz
+
+# Local environment credentials (never commit)
+application-local.properties
